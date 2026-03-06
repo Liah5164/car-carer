@@ -157,26 +157,33 @@ async def batch_upload(
 
 
 async def _process_batch(batch_id: str):
-    """Process all files in a batch sequentially."""
+    """Process all files in a batch concurrently (up to 8 at a time)."""
     job = _batch_jobs[batch_id]
     vehicle_id = job["vehicle_id"]
     doc_type = job["doc_type"]
+    sem = asyncio.Semaphore(8)
 
-    for i, file_info in enumerate(job["files"]):
-        db = SessionLocal()
-        try:
-            vehicle = db.get(Vehicle, vehicle_id)
-            result = await _process_single_file(db, vehicle, file_info, doc_type)
-            job["results"].append(result)
-        except Exception as e:
-            job["results"].append({
-                "filename": file_info["original_filename"],
-                "success": False,
-                "message": str(e),
-            })
-        finally:
-            db.close()
-        job["processed"] = i + 1
+    async def _worker(file_info):
+        async with sem:
+            db = SessionLocal()
+            try:
+                vehicle = db.get(Vehicle, vehicle_id)
+                return await _process_single_file(db, vehicle, file_info, doc_type)
+            except Exception as e:
+                return {
+                    "filename": file_info["original_filename"],
+                    "success": False,
+                    "message": str(e),
+                }
+            finally:
+                db.close()
+
+    tasks = [asyncio.create_task(_worker(f)) for f in job["files"]]
+
+    for coro in asyncio.as_completed(tasks):
+        result = await coro
+        job["results"].append(result)
+        job["processed"] = len(job["results"])
 
     job["done"] = True
 
