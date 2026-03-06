@@ -1,11 +1,13 @@
 """Document extraction using Gemini Flash 2.0 via OpenRouter."""
 
+import io
 import json
 import base64
 from pathlib import Path
 
 import httpx
 import fitz  # PyMuPDF
+from PIL import Image, ImageEnhance, ImageFilter, ExifTags
 
 from app.config import settings
 
@@ -110,8 +112,55 @@ def _detect_mime(file_path: str) -> str:
     }.get(ext, "application/octet-stream")
 
 
+def _preprocess_image(img_bytes: bytes) -> bytes:
+    """Optimize a photo for OCR: fix orientation, enhance contrast/sharpness, upscale if small."""
+    img = Image.open(io.BytesIO(img_bytes))
+
+    # 1. Fix EXIF orientation (phone photos taken sideways/upside down)
+    try:
+        exif = img._getexif()
+        if exif:
+            orientation_key = next(
+                (k for k, v in ExifTags.TAGS.items() if v == "Orientation"), None
+            )
+            if orientation_key and orientation_key in exif:
+                orientation = exif[orientation_key]
+                rotations = {3: 180, 6: 270, 8: 90}
+                if orientation in rotations:
+                    img = img.rotate(rotations[orientation], expand=True)
+    except (AttributeError, StopIteration):
+        pass
+
+    # 2. Convert to RGB if needed (RGBA/palette modes)
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+
+    # 3. Upscale small images (< 1500px on shortest side)
+    min_dim = min(img.size)
+    if min_dim < 1500:
+        scale = 1500 / min_dim
+        new_size = (int(img.width * scale), int(img.height * scale))
+        img = img.resize(new_size, Image.LANCZOS)
+
+    # 4. Auto-contrast enhancement (helps with poor lighting)
+    enhancer = ImageEnhance.Contrast(img)
+    img = enhancer.enhance(1.3)
+
+    # 5. Slight brightness boost (underexposed photos)
+    enhancer = ImageEnhance.Brightness(img)
+    img = enhancer.enhance(1.1)
+
+    # 6. Sharpen (helps with slightly blurry photos)
+    img = img.filter(ImageFilter.SHARPEN)
+
+    # Export as PNG
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
 def _build_image_content(file_path: str) -> list[dict]:
-    """Build OpenAI-compatible image_url content parts."""
+    """Build OpenAI-compatible image_url content parts with preprocessing."""
     mime = _detect_mime(file_path)
     is_pdf = mime == "application/pdf"
 
@@ -119,6 +168,7 @@ def _build_image_content(file_path: str) -> list[dict]:
     if is_pdf:
         images = _pdf_to_images(file_path)
         for img_bytes in images:
+            # PDF renders are already clean, no preprocessing needed
             b64 = base64.b64encode(img_bytes).decode()
             parts.append({
                 "type": "image_url",
@@ -126,10 +176,11 @@ def _build_image_content(file_path: str) -> list[dict]:
             })
     else:
         img_bytes = _read_image(file_path)
+        img_bytes = _preprocess_image(img_bytes)
         b64 = base64.b64encode(img_bytes).decode()
         parts.append({
             "type": "image_url",
-            "image_url": {"url": f"data:{mime};base64,{b64}"},
+            "image_url": {"url": f"data:image/png;base64,{b64}"},
         })
     return parts
 
