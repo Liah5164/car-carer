@@ -13,12 +13,13 @@ class Vehicle(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))  # "Ma Clio"
-    brand: Mapped[str] = mapped_column(String(50))
-    model: Mapped[str] = mapped_column(String(50))
+    brand: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     plate_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     vin: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     fuel_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    owner_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     initial_mileage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     purchase_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

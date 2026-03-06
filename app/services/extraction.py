@@ -21,6 +21,14 @@ Extrais les informations suivantes au format JSON strict :
   "mileage": nombre ou null,
   "garage_name": "string ou null",
   "total_cost": nombre ou null,
+  "vehicle_info": {
+    "brand": "marque du vehicule ou null",
+    "model": "modele du vehicule ou null",
+    "year": nombre ou null,
+    "plate_number": "plaque d'immatriculation ou null",
+    "vin": "numero de serie/VIN ou null",
+    "fuel_type": "Essence/Diesel/Electrique/Hybride/GPL ou null"
+  },
   "items": [
     {
       "description": "description du travail",
@@ -50,6 +58,15 @@ Extrais les informations suivantes au format JSON strict :
   "center_name": "nom du centre ou null",
   "result": "favorable" ou "defavorable" ou "contre_visite",
   "next_due_date": "YYYY-MM-DD ou null",
+  "vehicle_info": {
+    "brand": "marque du vehicule ou null",
+    "model": "modele du vehicule ou null",
+    "year": "annee de premiere mise en circulation ou null",
+    "plate_number": "plaque d'immatriculation ou null",
+    "vin": "numero de serie/VIN ou null",
+    "fuel_type": "Essence/Diesel/Electrique/Hybride/GPL ou null",
+    "owner_count": "nombre de proprietaires successifs ou null"
+  },
   "defects": [
     {
       "code": "code du defaut (ex: 1.1.1.a.1) ou null",

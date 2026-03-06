@@ -5,7 +5,7 @@ function app() {
         vehicles: [],
         selectedVehicle: null,
         showAddVehicle: false,
-        newVehicle: { name: '', brand: '', model: '', year: null, plate_number: '', fuel_type: '', initial_mileage: null },
+        newVehicle: { name: '' },
         detailTab: 'maintenance',
         maintenanceEvents: [],
         ctReports: [],
@@ -34,20 +34,14 @@ function app() {
         },
 
         async addVehicle() {
-            const body = { ...this.newVehicle };
-            if (!body.year) delete body.year;
-            if (!body.plate_number) delete body.plate_number;
-            if (!body.fuel_type) delete body.fuel_type;
-            if (!body.initial_mileage) delete body.initial_mileage;
-
             const res = await fetch('/api/vehicles', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
+                body: JSON.stringify({ name: this.newVehicle.name }),
             });
             if (res.ok) {
                 this.showAddVehicle = false;
-                this.newVehicle = { name: '', brand: '', model: '', year: null, plate_number: '', fuel_type: '', initial_mileage: null };
+                this.newVehicle = { name: '' };
                 await this.loadVehicles();
             }
         },

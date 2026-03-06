@@ -54,7 +54,7 @@
                         <div class="flex justify-between items-start mb-3">
                             <div>
                                 <h3 class="font-bold text-lg text-gray-800" x-text="v.name"></h3>
-                                <p class="text-gray-500" x-text="v.brand + ' ' + v.model + (v.year ? ' (' + v.year + ')' : '')"></p>
+                                <p class="text-gray-500" x-text="[v.brand, v.model, v.year ? '(' + v.year + ')' : ''].filter(Boolean).join(' ') || 'Infos a completer via documents'"></p>
                             </div>
                             <span class="text-xs bg-brand-100 text-brand-700 px-2 py-1 rounded-full" x-text="v.plate_number || 'N/R'"></span>
                         </div>
@@ -80,46 +80,10 @@
                     <form @submit.prevent="addVehicle()">
                         <div class="space-y-3">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-                                <input x-model="newVehicle.name" type="text" required placeholder="Ma Clio" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nom du vehicule *</label>
+                                <input x-model="newVehicle.name" type="text" required placeholder="Ex: Berlingo familial, Clio de Julie..." class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Marque *</label>
-                                    <input x-model="newVehicle.brand" type="text" required placeholder="Renault" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Modele *</label>
-                                    <input x-model="newVehicle.model" type="text" required placeholder="Clio IV" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500">
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Annee</label>
-                                    <input x-model.number="newVehicle.year" type="number" placeholder="2015" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Plaque</label>
-                                    <input x-model="newVehicle.plate_number" type="text" placeholder="AB-123-CD" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500">
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Carburant</label>
-                                    <select x-model="newVehicle.fuel_type" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500">
-                                        <option value="">--</option>
-                                        <option>Essence</option>
-                                        <option>Diesel</option>
-                                        <option>Electrique</option>
-                                        <option>Hybride</option>
-                                        <option>GPL</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Km initial</label>
-                                    <input x-model.number="newVehicle.initial_mileage" type="number" placeholder="50000" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500">
-                                </div>
-                            </div>
+                            <p class="text-xs text-gray-400">Les autres informations (marque, modele, plaque...) seront remplies automatiquement a partir de vos documents.</p>
                         </div>
                         <div class="flex gap-3 mt-6">
                             <button type="button" @click="showAddVehicle = false" class="flex-1 py-2 border rounded-lg hover:bg-gray-50">Annuler</button>
@@ -135,7 +99,7 @@
                     <div class="flex items-center justify-between mb-6">
                         <div>
                             <h3 class="text-xl font-bold" x-text="selectedVehicle?.name"></h3>
-                            <p class="text-gray-500" x-text="selectedVehicle ? selectedVehicle.brand + ' ' + selectedVehicle.model : ''"></p>
+                            <p class="text-gray-500" x-text="selectedVehicle ? [selectedVehicle.brand, selectedVehicle.model, selectedVehicle.year ? '(' + selectedVehicle.year + ')' : ''].filter(Boolean).join(' ') : ''"></p>
                         </div>
                         <button @click="selectedVehicle = null" class="text-gray-400 hover:text-gray-600">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>

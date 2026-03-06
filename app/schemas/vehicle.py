@@ -5,8 +5,8 @@ from pydantic import BaseModel
 
 class VehicleCreate(BaseModel):
     name: str
-    brand: str
-    model: str
+    brand: Optional[str] = None
+    model: Optional[str] = None
     year: Optional[int] = None
     plate_number: Optional[str] = None
     vin: Optional[str] = None
@@ -30,8 +30,8 @@ class VehicleUpdate(BaseModel):
 class VehicleOut(BaseModel):
     id: int
     name: str
-    brand: str
-    model: str
+    brand: Optional[str]
+    model: Optional[str]
     year: Optional[int]
     plate_number: Optional[str]
     vin: Optional[str]
@@ -46,8 +46,8 @@ class VehicleOut(BaseModel):
 class VehicleSummary(BaseModel):
     id: int
     name: str
-    brand: str
-    model: str
+    brand: Optional[str]
+    model: Optional[str]
     year: Optional[int]
     plate_number: Optional[str]
     last_mileage: Optional[int]

@@ -72,6 +72,9 @@ async def upload_and_extract(
     doc.extraction_raw = json.dumps(data, ensure_ascii=False)
     doc.extracted = True
 
+    # Enrich vehicle info from extracted data
+    _enrich_vehicle(vehicle, data.get("vehicle_info"))
+
     # Determine actual doc type from extraction
     actual_type = data.get("doc_type", doc_type)
     if actual_type in ("invoice", "quote"):
@@ -99,6 +102,25 @@ async def upload_and_extract(
         return ExtractionResult(
             success=True, doc_type="unknown", message="Document extrait mais type non identifie", data=data
         )
+
+
+def _enrich_vehicle(vehicle: Vehicle, vehicle_info: dict | None) -> None:
+    """Update vehicle fields from extracted document data (only fills blanks)."""
+    if not vehicle_info:
+        return
+    field_map = {
+        "brand": "brand",
+        "model": "model",
+        "year": "year",
+        "plate_number": "plate_number",
+        "vin": "vin",
+        "fuel_type": "fuel_type",
+        "owner_count": "owner_count",
+    }
+    for src_key, dest_attr in field_map.items():
+        value = vehicle_info.get(src_key)
+        if value and not getattr(vehicle, dest_attr):
+            setattr(vehicle, dest_attr, value)
 
 
 def _create_maintenance_event(db: Session, vehicle_id: int, doc_id: int, data: dict) -> MaintenanceEvent:
