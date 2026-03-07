@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import UPLOAD_PATH
 from app.database import get_db, SessionLocal
 from app.models import Document, Vehicle, MaintenanceEvent, MaintenanceItem, CTReport, CTDefect
-from app.schemas.document import DocumentOut, ExtractionResult
+from app.schemas.document import DocumentOut, ExtractionResult, DateConfirmation
 from app.schemas.maintenance import MaintenanceEventOut
 from app.schemas.ct_report import CTReportOut
 from app.services.extraction import extract_document
@@ -76,38 +76,59 @@ async def upload_and_extract(
 
     # Store raw extraction
     doc.extraction_raw = json.dumps(data, ensure_ascii=False)
-    doc.extracted = True
 
     # Enrich vehicle info from extracted data
     _enrich_vehicle(vehicle, data.get("vehicle_info"))
 
-    # Determine actual doc type from extraction
-    actual_type = data.get("doc_type", doc_type)
-    if actual_type in ("invoice", "quote"):
+    # Check date confidence
+    date_confidence = data.get("date_confidence", "high")
+
+    if date_confidence == "low":
+        # Don't finalize — ask user to confirm/correct the date
+        db.commit()
+        actual_type = _detect_actual_type(data, doc_type)
         doc.doc_type = actual_type
-        event = _create_maintenance_event(db, vehicle_id, doc.id, data)
         db.commit()
         return ExtractionResult(
             success=True,
             doc_type=actual_type,
-            message=f"{'Facture' if actual_type == 'invoice' else 'Devis'} extrait(e): {len(data.get('items', []))} lignes",
+            message=f"Date incertaine ({data.get('date', '?')}) — confirmation requise",
             data=data,
+            needs_clarification=True,
+            document_id=doc.id,
+            extracted_date=data.get("date"),
         )
-    elif actual_type == "ct_report" or "defects" in data:
-        doc.doc_type = "ct_report"
-        ct = _create_ct_report(db, vehicle_id, doc.id, data)
-        db.commit()
-        return ExtractionResult(
-            success=True,
-            doc_type="ct_report",
-            message=f"CT extrait: {data.get('result', '?')}, {len(data.get('defects', []))} defaut(s)",
-            data=data,
-        )
-    else:
-        db.commit()
-        return ExtractionResult(
-            success=True, doc_type="unknown", message="Document extrait mais type non identifie", data=data
-        )
+
+    # Date is confident — finalize normally
+    return _finalize_document(db, doc, vehicle, data, doc_type)
+
+
+@router.post("/{document_id}/confirm", response_model=ExtractionResult)
+def confirm_document_date(
+    document_id: int,
+    body: DateConfirmation,
+    db: Session = Depends(get_db),
+):
+    """Confirm or correct the date of a pending document, then finalize extraction."""
+    doc = db.get(Document, document_id)
+    if not doc:
+        raise HTTPException(404, "Document non trouve")
+
+    if doc.extracted:
+        raise HTTPException(400, "Document deja finalise")
+
+    if not doc.extraction_raw:
+        raise HTTPException(400, "Aucune donnee d'extraction disponible")
+
+    data = json.loads(doc.extraction_raw)
+
+    # Override date with user-confirmed value
+    data["date"] = body.date.isoformat()
+    data["date_confidence"] = "confirmed"
+    doc.extraction_raw = json.dumps(data, ensure_ascii=False)
+
+    vehicle = db.get(Vehicle, doc.vehicle_id)
+    return _finalize_document(db, doc, vehicle, data, doc.doc_type)
 
 
 @router.post("/batch-upload")
@@ -157,11 +178,11 @@ async def batch_upload(
 
 
 async def _process_batch(batch_id: str):
-    """Process all files in a batch concurrently (up to 8 at a time)."""
+    """Process all files in a batch concurrently (up to 3 at a time)."""
     job = _batch_jobs[batch_id]
     vehicle_id = job["vehicle_id"]
     doc_type = job["doc_type"]
-    sem = asyncio.Semaphore(8)
+    sem = asyncio.Semaphore(3)
 
     async def _worker(file_info):
         async with sem:
@@ -212,12 +233,41 @@ async def _process_single_file(db: Session, vehicle: Vehicle, file_info: dict, d
         return {"filename": file_info["original_filename"], "success": False, "message": data["error"]}
 
     doc.extraction_raw = json.dumps(data, ensure_ascii=False)
-    doc.extracted = True
     _enrich_vehicle(vehicle, data.get("vehicle_info"))
 
-    actual_type = data.get("doc_type", doc_type)
+    actual_type = _detect_actual_type(data, doc_type)
+    date_confidence = data.get("date_confidence", "high")
+
+    if date_confidence == "low":
+        doc.doc_type = actual_type
+        db.commit()
+        return {
+            "filename": file_info["original_filename"],
+            "success": True,
+            "doc_type": actual_type,
+            "message": f"Date incertaine ({data.get('date', '?')}) — a confirmer",
+            "needs_clarification": True,
+            "document_id": doc.id,
+            "extracted_date": data.get("date"),
+        }
+
+    # Check for duplicates before creating records
+    duplicate = _check_duplicate(db, vehicle.id, actual_type, data)
+    if duplicate:
+        doc.doc_type = actual_type
+        doc.extracted = True
+        db.commit()
+        return {
+            "filename": file_info["original_filename"],
+            "success": True,
+            "doc_type": actual_type,
+            "message": f"Doublon detecte (existant du {duplicate}), document ignore",
+            "duplicate": True,
+        }
+
     if actual_type in ("invoice", "quote"):
         doc.doc_type = actual_type
+        doc.extracted = True
         _create_maintenance_event(db, vehicle.id, doc.id, data)
         db.commit()
         label = "Facture" if actual_type == "invoice" else "Devis"
@@ -227,8 +277,9 @@ async def _process_single_file(db: Session, vehicle: Vehicle, file_info: dict, d
             "doc_type": actual_type,
             "message": f"{label}: {len(data.get('items', []))} lignes",
         }
-    elif actual_type == "ct_report" or "defects" in data:
+    elif actual_type == "ct_report":
         doc.doc_type = "ct_report"
+        doc.extracted = True
         _create_ct_report(db, vehicle.id, doc.id, data)
         db.commit()
         return {
@@ -238,6 +289,7 @@ async def _process_single_file(db: Session, vehicle: Vehicle, file_info: dict, d
             "message": f"CT: {data.get('result', '?')}, {len(data.get('defects', []))} defaut(s)",
         }
     else:
+        doc.extracted = True
         db.commit()
         return {"filename": file_info["original_filename"], "success": True, "doc_type": "unknown", "message": "Type non identifie"}
 
@@ -265,12 +317,16 @@ async def batch_status_sse(batch_id: str):
             if job["done"]:
                 # Send final summary
                 success_count = sum(1 for r in job["results"] if r.get("success"))
+                clarify_count = sum(1 for r in job["results"] if r.get("needs_clarification"))
+                duplicate_count = sum(1 for r in job["results"] if r.get("duplicate"))
                 summary = {
                     "done": True,
                     "processed": job["total"],
                     "total": job["total"],
                     "success_count": success_count,
                     "error_count": job["total"] - success_count,
+                    "clarification_count": clarify_count,
+                    "duplicate_count": duplicate_count,
                 }
                 yield f"data: {json.dumps(summary, ensure_ascii=False)}\n\n"
                 del _batch_jobs[batch_id]
@@ -278,6 +334,142 @@ async def batch_status_sse(batch_id: str):
             await asyncio.sleep(0.5)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.get("/pending/{vehicle_id}")
+def list_pending_documents(vehicle_id: int, db: Session = Depends(get_db)):
+    """List documents that need date clarification (extracted=False with extraction_raw)."""
+    docs = (
+        db.query(Document)
+        .filter(
+            Document.vehicle_id == vehicle_id,
+            Document.extracted == False,
+            Document.extraction_raw.isnot(None),
+        )
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
+    results = []
+    for doc in docs:
+        try:
+            data = json.loads(doc.extraction_raw)
+        except json.JSONDecodeError:
+            continue
+        if "error" in data:
+            continue
+        results.append({
+            "id": doc.id,
+            "original_filename": doc.original_filename,
+            "doc_type": doc.doc_type,
+            "extracted_date": data.get("date"),
+            "garage_name": data.get("garage_name") or data.get("center_name"),
+            "mileage": data.get("mileage"),
+            "total_cost": data.get("total_cost"),
+            "items_count": len(data.get("items", data.get("defects", []))),
+        })
+    return results
+
+
+def _detect_actual_type(data: dict, doc_type_hint: str) -> str:
+    """Determine actual document type from extraction data."""
+    actual = data.get("doc_type", doc_type_hint)
+    if actual in ("invoice", "quote"):
+        return actual
+    if "defects" in data or actual == "ct_report":
+        return "ct_report"
+    return "unknown"
+
+
+def _check_duplicate(db: Session, vehicle_id: int, doc_type: str, data: dict) -> str | None:
+    """Check if a similar record already exists. Returns date string if duplicate found."""
+    extracted_date = data.get("date")
+    if not extracted_date:
+        return None
+
+    try:
+        d = date.fromisoformat(extracted_date)
+    except ValueError:
+        return None
+
+    if doc_type in ("invoice", "quote"):
+        garage = data.get("garage_name")
+        total = data.get("total_cost")
+        query = db.query(MaintenanceEvent).filter(
+            MaintenanceEvent.vehicle_id == vehicle_id,
+            MaintenanceEvent.date == d,
+            MaintenanceEvent.event_type == doc_type,
+        )
+        if garage:
+            query = query.filter(MaintenanceEvent.garage_name == garage)
+        if total:
+            query = query.filter(MaintenanceEvent.total_cost == total)
+        if query.first():
+            return extracted_date
+
+    elif doc_type == "ct_report":
+        result = data.get("result")
+        mileage = data.get("mileage")
+        defect_count = len(data.get("defects", []))
+        query = db.query(CTReport).filter(
+            CTReport.vehicle_id == vehicle_id,
+            CTReport.date == d,
+        )
+        if result:
+            query = query.filter(CTReport.result == result)
+        if mileage:
+            query = query.filter(CTReport.mileage == mileage)
+        existing = query.first()
+        if existing and len(existing.defects) == defect_count:
+            return extracted_date
+
+    return None
+
+
+def _finalize_document(db: Session, doc: Document, vehicle: Vehicle, data: dict, doc_type_hint: str) -> ExtractionResult:
+    """Create maintenance event or CT report from extraction data and finalize the document."""
+    actual_type = _detect_actual_type(data, doc_type_hint)
+
+    # Check for duplicates
+    duplicate = _check_duplicate(db, vehicle.id, actual_type, data)
+    if duplicate:
+        doc.doc_type = actual_type
+        doc.extracted = True
+        db.commit()
+        return ExtractionResult(
+            success=True,
+            doc_type=actual_type,
+            message=f"Doublon detecte (existant du {duplicate}), document ignore",
+            data=data,
+        )
+
+    if actual_type in ("invoice", "quote"):
+        doc.doc_type = actual_type
+        doc.extracted = True
+        _create_maintenance_event(db, vehicle.id, doc.id, data)
+        db.commit()
+        return ExtractionResult(
+            success=True,
+            doc_type=actual_type,
+            message=f"{'Facture' if actual_type == 'invoice' else 'Devis'} extrait(e): {len(data.get('items', []))} lignes",
+            data=data,
+        )
+    elif actual_type == "ct_report":
+        doc.doc_type = "ct_report"
+        doc.extracted = True
+        _create_ct_report(db, vehicle.id, doc.id, data)
+        db.commit()
+        return ExtractionResult(
+            success=True,
+            doc_type="ct_report",
+            message=f"CT extrait: {data.get('result', '?')}, {len(data.get('defects', []))} defaut(s)",
+            data=data,
+        )
+    else:
+        doc.extracted = True
+        db.commit()
+        return ExtractionResult(
+            success=True, doc_type="unknown", message="Document extrait mais type non identifie", data=data
+        )
 
 
 def _enrich_vehicle(vehicle: Vehicle, vehicle_info: dict | None) -> None:

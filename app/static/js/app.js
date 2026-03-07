@@ -17,6 +17,12 @@ function app() {
         batchProgress: null,
         batchResults: [],
 
+        // Date clarification
+        pendingDocs: [],
+        showClarifyModal: false,
+        clarifyDoc: null,
+        clarifyDate: '',
+
         // Chat state
         chatVehicleId: null,
         conversations: [],
@@ -58,6 +64,7 @@ function app() {
                 this.loadMaintenance(v.id),
                 this.loadCTReports(v.id),
                 this.loadDocuments(v.id),
+                this.loadPendingDocs(v.id),
             ]);
         },
 
@@ -76,6 +83,11 @@ function app() {
             this.documents = await res.json();
         },
 
+        async loadPendingDocs(vehicleId) {
+            const res = await fetch(`/api/documents/pending/${vehicleId}`);
+            this.pendingDocs = await res.json();
+        },
+
         // --- Upload ---
         async uploadFile(file) {
             if (!this.selectedVehicle) return;
@@ -89,14 +101,15 @@ function app() {
 
             try {
                 const res = await fetch('/api/documents/upload', { method: 'POST', body: form });
-                this.uploadResult = await res.json();
+                const result = await res.json();
+                this.uploadResult = result;
+
+                if (result.needs_clarification) {
+                    this.openClarifyModal(result);
+                }
+
                 // Refresh data
-                await Promise.all([
-                    this.loadMaintenance(this.selectedVehicle.id),
-                    this.loadCTReports(this.selectedVehicle.id),
-                    this.loadDocuments(this.selectedVehicle.id),
-                    this.loadVehicles(),
-                ]);
+                await this._refreshAll();
             } catch (e) {
                 this.uploadResult = { success: false, message: 'Erreur reseau: ' + e.message };
             }
@@ -154,13 +167,7 @@ function app() {
                     if (msg.done) {
                         evtSource.close();
                         this.uploading = false;
-                        // Refresh all data
-                        await Promise.all([
-                            this.loadMaintenance(this.selectedVehicle.id),
-                            this.loadCTReports(this.selectedVehicle.id),
-                            this.loadDocuments(this.selectedVehicle.id),
-                            this.loadVehicles(),
-                        ]);
+                        await this._refreshAll();
                     }
                 };
                 evtSource.onerror = () => {
@@ -172,6 +179,62 @@ function app() {
                 this.uploading = false;
                 this.batchProgress = { processed: 0, total: files.length, done: true, error_count: files.length, success_count: 0 };
             }
+        },
+
+        // --- Date clarification ---
+        openClarifyModal(result) {
+            this.clarifyDoc = {
+                document_id: result.document_id,
+                doc_type: result.doc_type,
+                extracted_date: result.extracted_date,
+                data: result.data,
+            };
+            this.clarifyDate = result.extracted_date || '';
+            this.showClarifyModal = true;
+        },
+
+        openClarifyFromPending(pending) {
+            this.clarifyDoc = {
+                document_id: pending.id,
+                doc_type: pending.doc_type,
+                extracted_date: pending.extracted_date,
+                filename: pending.original_filename,
+                garage_name: pending.garage_name,
+                mileage: pending.mileage,
+                total_cost: pending.total_cost,
+            };
+            this.clarifyDate = pending.extracted_date || '';
+            this.showClarifyModal = true;
+        },
+
+        async confirmDate() {
+            if (!this.clarifyDoc || !this.clarifyDate) return;
+
+            try {
+                const res = await fetch(`/api/documents/${this.clarifyDoc.document_id}/confirm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: this.clarifyDate }),
+                });
+                const result = await res.json();
+                this.uploadResult = result;
+                this.showClarifyModal = false;
+                this.clarifyDoc = null;
+                await this._refreshAll();
+            } catch (e) {
+                this.uploadResult = { success: false, message: 'Erreur: ' + e.message };
+            }
+        },
+
+        async _refreshAll() {
+            if (!this.selectedVehicle) return;
+            await Promise.all([
+                this.loadMaintenance(this.selectedVehicle.id),
+                this.loadCTReports(this.selectedVehicle.id),
+                this.loadDocuments(this.selectedVehicle.id),
+                this.loadPendingDocs(this.selectedVehicle.id),
+                this.loadVehicles(),
+            ]);
         },
 
         // --- Chat ---

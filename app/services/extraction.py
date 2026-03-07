@@ -1,4 +1,4 @@
-"""Document extraction using Gemini Flash 2.0 via OpenRouter."""
+"""Document extraction using Gemini 2.5 Flash via OpenRouter."""
 
 import io
 import json
@@ -12,7 +12,7 @@ from PIL import Image, ImageEnhance, ImageFilter, ExifTags
 from app.config import settings
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "google/gemini-flash-2.0"
+MODEL = "google/gemini-2.5-flash"
 
 INVOICE_PROMPT = """Analyse cette facture ou ce devis d'entretien automobile.
 Extrais les informations suivantes au format JSON strict :
@@ -20,6 +20,7 @@ Extrais les informations suivantes au format JSON strict :
 {
   "doc_type": "invoice" ou "quote",
   "date": "YYYY-MM-DD",
+  "date_confidence": "high" ou "low",
   "mileage": nombre ou null,
   "garage_name": "string ou null",
   "total_cost": nombre ou null,
@@ -34,7 +35,7 @@ Extrais les informations suivantes au format JSON strict :
   "items": [
     {
       "description": "description du travail",
-      "category": "une parmi: moteur, freinage, direction, suspension, transmission, echappement, electricite, carrosserie, climatisation, pneus, vidange, filtres, distribution, embrayage, autre",
+      "category": "une parmi la liste ci-dessous",
       "part_name": "nom de la piece ou null",
       "quantity": nombre ou null,
       "unit_price": nombre ou null,
@@ -45,10 +46,34 @@ Extrais les informations suivantes au format JSON strict :
   "notes": "remarques generales ou null"
 }
 
+CATEGORIES DISPONIBLES (choisis la plus precise) :
+- moteur : bloc moteur, culasse, joint de culasse, bougies, injecteurs, turbo, durite, support moteur, courroie accessoire, pompe a eau
+- freinage : plaquettes, disques, tambours, etriers, liquide de frein, flexible de frein, maitre cylindre
+- direction : cremaillere, biellette de direction, rotule, pompe direction assistee, volant, colonne
+- suspension : amortisseurs, ressorts, silent-blocs, triangles, biellettes de barre stabilisatrice, roulement de roue, soufflets
+- transmission : embrayage, boite de vitesses, cardan, soufflet de cardan, differentiel, volant moteur
+- echappement : pot, catalyseur, sonde lambda, silencieux, collecteur, tube, FAP/DPF
+- electricite : batterie, alternateur, demarreur, faisceau, fusible, capteur, sonde, calculateur
+- eclairage : phares, ampoules, feux AR, antibrouillard, clignotants, optiques, xénon, LED
+- carrosserie : pare-chocs, ailes, capot, portes, retros, joints, verins capot/coffre, vitrage
+- climatisation : compresseur clim, gaz refrigerant, recharge clim, condenseur, evaporateur
+- pneus : pneumatiques, equilibrage, geometrie, parallelisme, jantes, valve
+- vidange : huile moteur, filtre a huile, vidange boite
+- filtres : filtre a air, filtre habitacle, filtre a carburant, filtre a particules
+- distribution : courroie/chaine de distribution, kit distribution, galet tendeur
+- refroidissement : radiateur, thermostat, calorstat, liquide refroidissement, durite refroidissement, pompe a eau
+- essuyage : balais essuie-glace, lave-glace, pompe lave-glace, gicleurs
+- antipollution : vanne EGR, AdBlue, catalyseur, FAP, sonde NOx, code defaut OBD
+- revision : forfait revision, controle multi-points, diagnostic electronique
+- autre : uniquement si AUCUNE categorie ci-dessus ne convient
+
 IMPORTANT :
-- Les montants sont en euros
+- Les montants sont en euros (ou dans la devise visible)
+- "date" = la date d'emission de la facture/devis imprimee sur le document
+- NE PAS confondre la date d'impression/scan avec la date de facture
+- Si la date est illisible, floue, ou absente, mets date_confidence a "low"
+- Si la date est clairement lisible, mets date_confidence a "high"
 - Si une information n'est pas visible, mets null
-- Categorise chaque ligne de travail
 - Retourne UNIQUEMENT le JSON, sans markdown ni commentaire"""
 
 CT_PROMPT = """Analyse ce proces-verbal de controle technique automobile.
@@ -56,6 +81,7 @@ Extrais les informations suivantes au format JSON strict :
 
 {
   "date": "YYYY-MM-DD",
+  "date_confidence": "high" ou "low",
   "mileage": nombre ou null,
   "center_name": "nom du centre ou null",
   "result": "favorable" ou "defavorable" ou "contre_visite",
@@ -81,6 +107,10 @@ Extrais les informations suivantes au format JSON strict :
 }
 
 IMPORTANT :
+- "date" = la date du controle technique imprimee sur le PV (champ "date du controle")
+- NE PAS confondre avec la date d'impression, la date de validite, ou la date du scan
+- Si la date est illisible ou absente, mets date_confidence a "low"
+- Si la date est clairement lisible, mets date_confidence a "high"
 - "a_surveiller" correspond aux points a controler lors du prochain CT
 - Si pas de defauts, retourne une liste vide
 - Retourne UNIQUEMENT le JSON, sans markdown ni commentaire"""
@@ -206,8 +236,22 @@ def _call_openrouter(image_parts: list[dict], prompt: str) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
+def _parse_json_response(raw_text: str) -> dict | None:
+    """Clean markdown wrapping and parse JSON. Returns None on failure."""
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
 async def extract_document(file_path: str, doc_type_hint: str = "auto") -> dict:
-    """Extract structured data from a document using Gemini Flash 2.0 via OpenRouter.
+    """Extract structured data from a document using Gemini via OpenRouter.
 
     Args:
         file_path: Path to the uploaded file (PDF or image)
@@ -220,28 +264,25 @@ async def extract_document(file_path: str, doc_type_hint: str = "auto") -> dict:
 
     # Choose prompt based on hint or try auto-detection
     if doc_type_hint == "ct_report":
-        prompt = CT_PROMPT
+        prompts_to_try = [CT_PROMPT]
     elif doc_type_hint in ("invoice", "quote"):
-        prompt = INVOICE_PROMPT
+        prompts_to_try = [INVOICE_PROMPT]
     else:
         detected = _call_openrouter(
             image_parts,
             "Ce document est-il un controle technique (CT) ou une facture/devis d'entretien ? Reponds UNIQUEMENT par 'ct' ou 'facture'.",
         ).strip().lower()
-        prompt = CT_PROMPT if "ct" in detected else INVOICE_PROMPT
+        if "ct" in detected:
+            prompts_to_try = [CT_PROMPT, INVOICE_PROMPT]
+        else:
+            prompts_to_try = [INVOICE_PROMPT, CT_PROMPT]
 
-    raw_text = _call_openrouter(image_parts, prompt).strip()
+    last_raw = ""
+    for prompt in prompts_to_try:
+        raw_text = _call_openrouter(image_parts, prompt)
+        last_raw = raw_text
+        data = _parse_json_response(raw_text)
+        if data is not None:
+            return data
 
-    # Clean potential markdown wrapping
-    if raw_text.startswith("```"):
-        raw_text = raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text[3:]
-    if raw_text.endswith("```"):
-        raw_text = raw_text[:-3]
-    raw_text = raw_text.strip()
-
-    try:
-        data = json.loads(raw_text)
-    except json.JSONDecodeError:
-        return {"error": "Failed to parse extraction result", "raw": raw_text}
-
-    return data
+    return {"error": "Failed to parse extraction result", "raw": last_raw.strip()}

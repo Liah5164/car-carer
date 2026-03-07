@@ -173,6 +173,29 @@
                         </div>
                     </div>
 
+                    <!-- Pending documents banner -->
+                    <div x-show="pendingDocs.length > 0" class="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6" x-cloak>
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                            <span class="font-medium text-amber-800" x-text="pendingDocs.length + ' document(s) en attente de confirmation de date'"></span>
+                        </div>
+                        <div class="space-y-2">
+                            <template x-for="p in pendingDocs" :key="p.id">
+                                <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-amber-200">
+                                    <div class="text-sm">
+                                        <span class="font-medium" x-text="p.original_filename"></span>
+                                        <span class="text-gray-500 ml-2" x-text="p.doc_type === 'ct_report' ? 'CT' : p.doc_type === 'invoice' ? 'Facture' : p.doc_type === 'quote' ? 'Devis' : p.doc_type"></span>
+                                        <span class="text-amber-600 ml-2" x-text="'Date extraite: ' + (p.extracted_date || '?')"></span>
+                                        <span class="text-gray-400 ml-2" x-text="p.garage_name ? '(' + p.garage_name + ')' : ''"></span>
+                                    </div>
+                                    <button @click="openClarifyFromPending(p)" class="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-amber-700 transition">
+                                        Confirmer la date
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
                     <!-- Tabs -->
                     <div class="flex border-b mb-4">
                         <button @click="detailTab = 'maintenance'" :class="detailTab === 'maintenance' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition">Entretiens</button>
@@ -330,6 +353,32 @@
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                         </button>
                     </form>
+                </div>
+            </div>
+        </div>
+        <!-- Date Clarification Modal -->
+        <div x-show="showClarifyModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+            <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-xl" @click.away="showClarifyModal = false">
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    <h3 class="text-xl font-bold">Confirmer la date</h3>
+                </div>
+                <p class="text-sm text-gray-600 mb-4">La date extraite de ce document n'est pas fiable (illisible, floue, ou possiblement la date du scan). Veuillez confirmer ou corriger :</p>
+                <div class="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
+                    <div x-show="clarifyDoc?.filename"><span class="font-medium">Fichier :</span> <span x-text="clarifyDoc?.filename"></span></div>
+                    <div><span class="font-medium">Type :</span> <span x-text="clarifyDoc?.doc_type === 'ct_report' ? 'Controle technique' : clarifyDoc?.doc_type === 'invoice' ? 'Facture' : clarifyDoc?.doc_type === 'quote' ? 'Devis' : clarifyDoc?.doc_type"></span></div>
+                    <div x-show="clarifyDoc?.garage_name"><span class="font-medium">Garage :</span> <span x-text="clarifyDoc?.garage_name"></span></div>
+                    <div x-show="clarifyDoc?.mileage"><span class="font-medium">Km :</span> <span x-text="clarifyDoc?.mileage?.toLocaleString()"></span></div>
+                    <div x-show="clarifyDoc?.total_cost"><span class="font-medium">Montant :</span> <span x-text="clarifyDoc?.total_cost + ' EUR'"></span></div>
+                    <div><span class="font-medium">Date extraite :</span> <span class="text-amber-600 font-medium" x-text="clarifyDoc?.extracted_date || 'Non lisible'"></span></div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date corrigee *</label>
+                    <input x-model="clarifyDate" type="date" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" @click="showClarifyModal = false" class="flex-1 py-2 border rounded-lg hover:bg-gray-50">Annuler</button>
+                    <button type="button" @click="confirmDate()" class="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700">Confirmer</button>
                 </div>
             </div>
         </div>

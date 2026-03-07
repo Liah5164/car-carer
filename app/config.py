@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Force .env to override system env vars
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)
 
 
 class Settings(BaseSettings):
@@ -7,8 +11,6 @@ class Settings(BaseSettings):
     openrouter_api_key: str
     database_url: str = "sqlite:///./care.db"
     upload_dir: str = "./uploads"
-
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 settings = Settings()

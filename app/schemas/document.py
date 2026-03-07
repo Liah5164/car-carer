@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel
 
@@ -20,3 +20,10 @@ class ExtractionResult(BaseModel):
     doc_type: str
     message: str
     data: Optional[dict] = None
+    needs_clarification: bool = False
+    document_id: Optional[int] = None
+    extracted_date: Optional[str] = None
+
+
+class DateConfirmation(BaseModel):
+    date: date
