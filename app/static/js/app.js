@@ -23,6 +23,10 @@ function app() {
         clarifyDoc: null,
         clarifyDate: '',
 
+        // Analysis state
+        analysis: null,
+        analysisLoading: false,
+
         // Chat state
         chatVehicleId: null,
         conversations: [],
@@ -56,15 +60,17 @@ function app() {
 
         async selectVehicle(v) {
             this.selectedVehicle = v;
-            this.detailTab = 'maintenance';
+            this.detailTab = 'analysis';
             this.uploadResult = null;
             this.batchProgress = null;
             this.batchResults = [];
+            this.analysis = null;
             await Promise.all([
                 this.loadMaintenance(v.id),
                 this.loadCTReports(v.id),
                 this.loadDocuments(v.id),
                 this.loadPendingDocs(v.id),
+                this.loadAnalysis(v.id),
             ]);
         },
 
@@ -233,8 +239,31 @@ function app() {
                 this.loadCTReports(this.selectedVehicle.id),
                 this.loadDocuments(this.selectedVehicle.id),
                 this.loadPendingDocs(this.selectedVehicle.id),
+                this.loadAnalysis(this.selectedVehicle.id),
                 this.loadVehicles(),
             ]);
+        },
+
+        async loadAnalysis(vehicleId) {
+            this.analysisLoading = true;
+            try {
+                const res = await fetch(`/api/vehicles/${vehicleId}/analysis`);
+                this.analysis = await res.json();
+            } catch (e) {
+                this.analysis = null;
+            }
+            this.analysisLoading = false;
+        },
+
+        analysisAlertIcon(level) {
+            if (level === 'critical') return { color: 'text-red-600 bg-red-50 border-red-200', badge: 'bg-red-100 text-red-700' };
+            if (level === 'warning') return { color: 'text-orange-600 bg-orange-50 border-orange-200', badge: 'bg-orange-100 text-orange-700' };
+            if (level === 'ok') return { color: 'text-green-600 bg-green-50 border-green-200', badge: 'bg-green-100 text-green-700' };
+            return { color: 'text-blue-600 bg-blue-50 border-blue-200', badge: 'bg-blue-100 text-blue-700' };
+        },
+
+        analysisLevelLabel(level) {
+            return { critical: 'CRITIQUE', warning: 'ATTENTION', info: 'INFO', ok: 'OK' }[level] || level;
         },
 
         // --- Chat ---

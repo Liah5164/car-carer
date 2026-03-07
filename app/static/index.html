@@ -198,9 +198,138 @@
 
                     <!-- Tabs -->
                     <div class="flex border-b mb-4">
+                        <button @click="detailTab = 'analysis'" :class="detailTab === 'analysis' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            Bilan
+                            <span x-show="analysis && analysis.alerts.filter(a => (a.level === 'critical' || a.level === 'warning')).length > 0"
+                                  class="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                                  x-text="analysis ? analysis.alerts.filter(a => a.level === 'critical' || a.level === 'warning').length : ''"></span>
+                        </button>
                         <button @click="detailTab = 'maintenance'" :class="detailTab === 'maintenance' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition">Entretiens</button>
                         <button @click="detailTab = 'ct'" :class="detailTab === 'ct' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition">Controles techniques</button>
                         <button @click="detailTab = 'docs'" :class="detailTab === 'docs' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition">Documents</button>
+                    </div>
+
+                    <!-- Analysis tab -->
+                    <div x-show="detailTab === 'analysis'">
+                        <div x-show="analysisLoading" class="text-center py-10">
+                            <div class="animate-spin w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full mx-auto"></div>
+                            <p class="text-sm text-gray-500 mt-2">Analyse en cours...</p>
+                        </div>
+                        <div x-show="!analysisLoading && analysis">
+                            <!-- CT Status -->
+                            <div x-show="analysis?.current_ct_status" class="mb-6">
+                                <div class="rounded-lg p-4 border"
+                                     :class="analysis?.current_ct_status?.result === 'favorable' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <h4 class="font-bold text-sm uppercase tracking-wide" :class="analysis?.current_ct_status?.result === 'favorable' ? 'text-green-700' : 'text-red-700'">Dernier controle technique</h4>
+                                            <p class="text-lg font-medium mt-1" x-text="analysis?.current_ct_status?.date + ' — ' + (analysis?.current_ct_status?.result || '').toUpperCase()"></p>
+                                            <p class="text-sm text-gray-600" x-text="(analysis?.current_ct_status?.mileage ? analysis.current_ct_status.mileage.toLocaleString() + ' km' : '') + (analysis?.current_ct_status?.center ? ' — ' + analysis.current_ct_status.center : '')"></p>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="text-3xl font-bold" :class="analysis?.current_ct_status?.result === 'favorable' ? 'text-green-600' : 'text-red-600'" x-text="analysis?.current_ct_status?.defect_count || 0"></span>
+                                            <p class="text-xs text-gray-500">defaut(s)</p>
+                                        </div>
+                                    </div>
+                                    <p x-show="analysis?.current_ct_status?.next_due" class="text-sm mt-2 text-gray-600" x-text="'Prochaine echeance : ' + (analysis?.current_ct_status?.next_due || '')"></p>
+                                </div>
+                            </div>
+
+                            <!-- Alerts -->
+                            <template x-if="analysis && analysis.alerts.filter(a => a.level === 'critical' && a.category !== 'interval').length > 0">
+                                <div class="mb-6">
+                                    <h4 class="font-bold text-red-700 mb-3 flex items-center gap-2">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                                        Alertes critiques
+                                    </h4>
+                                    <div class="space-y-2">
+                                        <template x-for="a in analysis.alerts.filter(a => a.level === 'critical' && a.category !== 'interval')" :key="a.title">
+                                            <div class="border rounded-lg p-3 bg-red-50 border-red-200">
+                                                <div class="flex items-start gap-2">
+                                                    <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700 whitespace-nowrap mt-0.5">CRITIQUE</span>
+                                                    <div>
+                                                        <p class="font-medium text-red-800 text-sm" x-text="a.title"></p>
+                                                        <p class="text-xs text-red-700 mt-1 whitespace-pre-line" x-text="a.detail"></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <template x-if="analysis && analysis.alerts.filter(a => a.level === 'warning' && a.category !== 'interval').length > 0">
+                                <div class="mb-6">
+                                    <h4 class="font-bold text-orange-700 mb-3 flex items-center gap-2">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        Avertissements
+                                    </h4>
+                                    <div class="space-y-2">
+                                        <template x-for="a in analysis.alerts.filter(a => a.level === 'warning' && a.category !== 'interval')" :key="a.title">
+                                            <div class="border rounded-lg p-3 bg-orange-50 border-orange-200">
+                                                <div class="flex items-start gap-2">
+                                                    <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-700 whitespace-nowrap mt-0.5">ATTENTION</span>
+                                                    <div>
+                                                        <p class="font-medium text-orange-800 text-sm" x-text="a.title"></p>
+                                                        <p class="text-xs text-orange-700 mt-1 whitespace-pre-line" x-text="a.detail"></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Maintenance intervals -->
+                            <div class="mb-6">
+                                <h4 class="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    Intervalles d'entretien
+                                </h4>
+                                <div class="grid gap-2">
+                                    <template x-for="a in (analysis?.maintenance_intervals || [])" :key="a.title">
+                                        <div class="border rounded-lg p-3 flex items-center justify-between"
+                                             :class="a.level === 'warning' ? 'bg-orange-50 border-orange-200' : a.level === 'ok' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'">
+                                            <div class="flex-1">
+                                                <p class="font-medium text-sm" x-text="a.maintenance_type || a.title"></p>
+                                                <p class="text-xs text-gray-600 mt-0.5" x-text="a.last_date ? 'Dernier : ' + a.last_date + (a.last_km ? ' (' + a.last_km.toLocaleString() + ' km)' : '') : 'Aucun historique'"></p>
+                                            </div>
+                                            <div class="text-right">
+                                                <span class="text-xs px-2 py-1 rounded-full font-bold"
+                                                      :class="a.level === 'warning' ? 'bg-orange-100 text-orange-700' : a.level === 'ok' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'"
+                                                      x-text="a.level === 'warning' ? 'EN RETARD' : a.level === 'ok' ? 'A JOUR' : 'INCONNU'"></span>
+                                                <p x-show="a.km_since" class="text-xs text-gray-500 mt-1" x-text="a.km_since ? a.km_since.toLocaleString() + ' km depuis' : ''"></p>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Info alerts -->
+                            <template x-if="analysis && analysis.alerts.filter(a => a.level === 'info' && a.category !== 'interval').length > 0">
+                                <div class="mb-6">
+                                    <h4 class="font-bold text-blue-700 mb-3 flex items-center gap-2">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        Informations
+                                    </h4>
+                                    <div class="space-y-2">
+                                        <template x-for="a in analysis.alerts.filter(a => a.level === 'info' && a.category !== 'interval')" :key="a.title">
+                                            <div class="border rounded-lg p-3 bg-blue-50 border-blue-200">
+                                                <p class="font-medium text-blue-800 text-sm" x-text="a.title"></p>
+                                                <p class="text-xs text-blue-700 mt-1 whitespace-pre-line" x-text="a.detail"></p>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <div x-show="analysis && analysis.alerts.length === 0" class="text-center py-10 text-green-600">
+                                <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <p class="text-lg font-medium">Aucune alerte</p>
+                                <p class="text-sm text-gray-500">Votre vehicule est en bonne sante</p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Maintenance tab -->

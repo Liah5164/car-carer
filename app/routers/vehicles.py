@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Vehicle, MaintenanceEvent, CTReport, Document
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate, VehicleOut, VehicleSummary
+from app.services.analysis import analyze_vehicle
 
 router = APIRouter(prefix="/api/vehicles", tags=["vehicles"])
 
@@ -99,3 +100,12 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Vehicule non trouve")
     db.delete(vehicle)
     db.commit()
+
+
+@router.get("/{vehicle_id}/analysis")
+def get_vehicle_analysis(vehicle_id: int, db: Session = Depends(get_db)):
+    """Proactive maintenance analysis: CT evolution, overdue intervals, unresolved defects."""
+    vehicle = db.get(Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(404, "Vehicule non trouve")
+    return analyze_vehicle(db, vehicle_id)

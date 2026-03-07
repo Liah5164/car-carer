@@ -10,6 +10,7 @@ from app.models import (
     Vehicle, MaintenanceEvent, MaintenanceItem,
     CTReport, CTDefect, Document,
 )
+from app.services.analysis import analyze_vehicle
 
 # Tool definitions for Claude API
 TOOL_DEFINITIONS = [
@@ -87,6 +88,17 @@ TOOL_DEFINITIONS = [
             "required": ["vehicle_id"],
         },
     },
+    {
+        "name": "get_vehicle_analysis",
+        "description": "Analyse proactive complete du vehicule : evolution des CT (defauts apparus, aggraves, recurrents), intervalles d'entretien depasses (vidange, distribution, freins, filtres...), defauts CT non resolus. Retourne des alertes classees par priorite.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "vehicle_id": {"type": "integer", "description": "ID du vehicule"},
+            },
+            "required": ["vehicle_id"],
+        },
+    },
 ]
 
 
@@ -99,6 +111,7 @@ def execute_tool(tool_name: str, tool_input: dict, db: Session) -> str:
         "compare_ct_reports": _compare_ct_reports,
         "get_mileage_timeline": _get_mileage_timeline,
         "get_spending_summary": _get_spending_summary,
+        "get_vehicle_analysis": _get_vehicle_analysis,
     }
     handler = handlers.get(tool_name)
     if not handler:
@@ -385,4 +398,55 @@ def _get_spending_summary(db: Session, vehicle_id: int, year: Optional[int] = No
         pct = ((amount or 0) / total * 100) if total else 0
         lines.append(f"  {cat or 'Non categorise'}: {amount or 0:.2f} EUR ({pct:.0f}%)")
     lines.append(f"\nTotal: {total:.2f} EUR")
+    return "\n".join(lines)
+
+
+def _get_vehicle_analysis(db: Session, vehicle_id: int) -> str:
+    result = analyze_vehicle(db, vehicle_id)
+    if "error" in result:
+        return result["error"]
+
+    lines = ["=== ANALYSE PROACTIVE ===\n"]
+
+    # Current CT status
+    ct = result.get("current_ct_status")
+    if ct:
+        lines.append(f"Dernier CT: {ct['date']} | {ct['result'].upper()} | {ct['defect_count']} defaut(s)")
+        if ct.get("next_due"):
+            lines.append(f"Prochaine echeance CT: {ct['next_due']}")
+        lines.append("")
+
+    # Alerts by level
+    alerts = result.get("alerts", [])
+    critical = [a for a in alerts if a["level"] == "critical"]
+    warning = [a for a in alerts if a["level"] == "warning"]
+    info = [a for a in alerts if a["level"] == "info"]
+
+    if critical:
+        lines.append(f"!!! ALERTES CRITIQUES ({len(critical)}) !!!")
+        for a in critical:
+            lines.append(f"  [CRITIQUE] {a['title']}")
+            lines.append(f"    {a['detail']}")
+        lines.append("")
+
+    if warning:
+        lines.append(f"AVERTISSEMENTS ({len(warning)}):")
+        for a in warning:
+            lines.append(f"  [ATTENTION] {a['title']}")
+            lines.append(f"    {a['detail']}")
+        lines.append("")
+
+    if info:
+        lines.append(f"INFORMATIONS ({len(info)}):")
+        for a in info:
+            lines.append(f"  [INFO] {a['title']}")
+            lines.append(f"    {a['detail']}")
+        lines.append("")
+
+    # Maintenance intervals summary
+    intervals = [a for a in alerts if a.get("category") == "interval"]
+    ok_count = sum(1 for a in intervals if a["level"] == "ok")
+    warn_count = sum(1 for a in intervals if a["level"] == "warning")
+    lines.append(f"Intervalles d'entretien: {ok_count} a jour, {warn_count} en retard")
+
     return "\n".join(lines)
