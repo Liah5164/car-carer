@@ -1,12 +1,13 @@
 """Authentication service: password hashing + JWT tokens."""
 
-import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt
 
-SECRET_KEY = secrets.token_hex(32)
+from app.config import settings
+
+SECRET_KEY = settings.jwt_secret
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 72
 

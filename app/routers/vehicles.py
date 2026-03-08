@@ -1,18 +1,24 @@
 import csv
 import io
+import shutil
+import uuid
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import Response as RawResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
+from fastapi.responses import Response as RawResponse, FileResponse
 from sqlalchemy import func, extract
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import Vehicle, MaintenanceEvent, MaintenanceItem, CTReport, CTDefect, Document, ShareLink
+from app.models import Vehicle, MaintenanceEvent, MaintenanceItem, CTReport, CTDefect, Document, ShareLink, FuelEntry
 from app.models.user import User
-from app.schemas.vehicle import VehicleCreate, VehicleUpdate, VehicleOut, VehicleSummary
+from app.schemas.vehicle import VehicleCreate, VehicleUpdate, VehicleOut, VehicleSummary, FuelEntryCreate, FuelEntryOut
 from app.services.analysis import analyze_vehicle
 from app.routers.auth import get_current_user
+
+PHOTO_DIR = Path("./uploads/photos")
+PHOTO_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/api/vehicles", tags=["vehicles"])
 
@@ -599,3 +605,188 @@ def export_maintenance_booklet(vehicle_id: int, user: User = Depends(get_current
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# --- Mileage validation helper ---
+
+def _get_last_known_mileage(db: Session, vehicle_id: int) -> int | None:
+    """Get the highest known mileage for a vehicle from all sources."""
+    sources = []
+    last_ev = db.query(MaintenanceEvent.mileage).filter(
+        MaintenanceEvent.vehicle_id == vehicle_id, MaintenanceEvent.mileage.isnot(None)
+    ).order_by(MaintenanceEvent.mileage.desc()).first()
+    if last_ev:
+        sources.append(last_ev[0])
+
+    last_ct = db.query(CTReport.mileage).filter(
+        CTReport.vehicle_id == vehicle_id, CTReport.mileage.isnot(None)
+    ).order_by(CTReport.mileage.desc()).first()
+    if last_ct:
+        sources.append(last_ct[0])
+
+    last_fuel = db.query(FuelEntry.mileage).filter(
+        FuelEntry.vehicle_id == vehicle_id
+    ).order_by(FuelEntry.mileage.desc()).first()
+    if last_fuel:
+        sources.append(last_fuel[0])
+
+    return max(sources) if sources else None
+
+
+def _validate_mileage(db: Session, vehicle_id: int, new_mileage: int) -> dict | None:
+    """Return a warning dict if mileage seems wrong, None if OK."""
+    last = _get_last_known_mileage(db, vehicle_id)
+    if last is None:
+        return None
+    if new_mileage < last:
+        return {"type": "mileage_regression", "message": f"Kilometrage {new_mileage} inferieur au dernier connu ({last} km)", "last_known": last}
+    if new_mileage - last > 50000:
+        return {"type": "mileage_jump", "message": f"Ecart de {new_mileage - last} km depuis le dernier releve ({last} km)", "last_known": last}
+    return None
+
+
+# --- Fuel tracking ---
+
+@router.post("/{vehicle_id}/fuel", status_code=201)
+def add_fuel_entry(vehicle_id: int, data: FuelEntryCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Add a fuel entry with mileage validation."""
+    _get_vehicle_or_404(vehicle_id, user, db)
+    warning = _validate_mileage(db, vehicle_id, data.mileage)
+
+    # Auto-calculate total_cost if missing
+    entry_data = data.model_dump()
+    if entry_data.get("price_per_liter") and not entry_data.get("total_cost"):
+        entry_data["total_cost"] = round(entry_data["liters"] * entry_data["price_per_liter"], 2)
+
+    entry = FuelEntry(vehicle_id=vehicle_id, **entry_data)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    result = FuelEntryOut.model_validate(entry).model_dump()
+    result["mileage_warning"] = warning
+    return result
+
+
+@router.get("/{vehicle_id}/fuel", response_model=list[FuelEntryOut])
+def list_fuel_entries(vehicle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _get_vehicle_or_404(vehicle_id, user, db)
+    return db.query(FuelEntry).filter(FuelEntry.vehicle_id == vehicle_id).order_by(FuelEntry.date.desc()).all()
+
+
+@router.delete("/{vehicle_id}/fuel/{entry_id}", status_code=204)
+def delete_fuel_entry(vehicle_id: int, entry_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _get_vehicle_or_404(vehicle_id, user, db)
+    entry = db.get(FuelEntry, entry_id)
+    if not entry or entry.vehicle_id != vehicle_id:
+        raise HTTPException(404, "Entree carburant non trouvee")
+    db.delete(entry)
+    db.commit()
+
+
+@router.get("/{vehicle_id}/fuel-stats")
+def get_fuel_stats(vehicle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Compute fuel consumption stats (L/100km, cost/km, monthly evolution)."""
+    _get_vehicle_or_404(vehicle_id, user, db)
+    entries = (
+        db.query(FuelEntry)
+        .filter(FuelEntry.vehicle_id == vehicle_id)
+        .order_by(FuelEntry.date)
+        .all()
+    )
+
+    if len(entries) < 2:
+        return {"avg_consumption": None, "avg_cost_per_km": None, "total_liters": sum(e.liters for e in entries), "total_fuel_cost": sum(e.total_cost or 0 for e in entries), "monthly": [], "entries_count": len(entries)}
+
+    # Consumption: only between consecutive full-tank fills
+    consumptions = []
+    total_liters = 0
+    total_cost = 0
+    for e in entries:
+        total_liters += e.liters
+        total_cost += e.total_cost or 0
+
+    # Calculate L/100km between consecutive entries with full_tank
+    full_entries = [e for e in entries if e.full_tank]
+    liters_between = 0
+    for i, e in enumerate(entries):
+        if i == 0:
+            continue
+        liters_between += e.liters
+        if e.full_tank and entries[i-1].full_tank if i == 1 else e.full_tank:
+            # Find last full tank before this one
+            prev_full = None
+            for j in range(i - 1, -1, -1):
+                if entries[j].full_tank:
+                    prev_full = entries[j]
+                    break
+            if prev_full and e.mileage > prev_full.mileage:
+                km = e.mileage - prev_full.mileage
+                liters_sum = sum(entries[k].liters for k in range(entries.index(prev_full) + 1, i + 1))
+                if km > 0:
+                    consumptions.append({"l100": round(liters_sum / km * 100, 2), "km": km, "date": str(e.date)})
+
+    avg_consumption = round(sum(c["l100"] for c in consumptions) / len(consumptions), 2) if consumptions else None
+
+    # Cost per km
+    total_km = entries[-1].mileage - entries[0].mileage
+    avg_cost_per_km = round(total_cost / total_km, 3) if total_km > 0 else None
+
+    # Monthly aggregation
+    monthly = {}
+    for e in entries:
+        key = e.date.strftime("%Y-%m")
+        if key not in monthly:
+            monthly[key] = {"liters": 0, "cost": 0, "fills": 0}
+        monthly[key]["liters"] += e.liters
+        monthly[key]["cost"] += e.total_cost or 0
+        monthly[key]["fills"] += 1
+
+    return {
+        "avg_consumption": avg_consumption,
+        "avg_cost_per_km": avg_cost_per_km,
+        "total_liters": round(total_liters, 2),
+        "total_fuel_cost": round(total_cost, 2),
+        "entries_count": len(entries),
+        "consumptions": consumptions,
+        "monthly": [{"month": k, **v} for k, v in sorted(monthly.items())],
+    }
+
+
+# --- Vehicle photo ---
+
+@router.post("/{vehicle_id}/photo")
+def upload_vehicle_photo(vehicle_id: int, file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Upload a photo for the vehicle."""
+    vehicle = _get_vehicle_or_404(vehicle_id, user, db)
+    if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(400, "Format non supporte (JPEG, PNG ou WebP)")
+
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+    filename = f"{vehicle_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = PHOTO_DIR / filename
+
+    with open(filepath, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # Delete old photo if exists
+    if vehicle.photo_path:
+        old = PHOTO_DIR / vehicle.photo_path
+        if old.exists():
+            old.unlink()
+
+    vehicle.photo_path = filename
+    db.commit()
+    return {"photo_path": filename}
+
+
+@router.get("/{vehicle_id}/photo")
+def get_vehicle_photo(vehicle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Serve the vehicle photo."""
+    vehicle = _get_vehicle_or_404(vehicle_id, user, db)
+    if not vehicle.photo_path:
+        raise HTTPException(404, "Pas de photo")
+    filepath = PHOTO_DIR / vehicle.photo_path
+    if not filepath.exists():
+        raise HTTPException(404, "Fichier photo introuvable")
+    return FileResponse(str(filepath))

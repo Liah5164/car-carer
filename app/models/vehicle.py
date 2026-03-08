@@ -36,6 +36,7 @@ class Vehicle(Base):
     owner_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     initial_mileage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     purchase_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    photo_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     owner = relationship("User", back_populates="vehicles")
@@ -44,3 +45,4 @@ class Vehicle(Base):
     ct_reports = relationship("CTReport", back_populates="vehicle", cascade="all, delete-orphan")
     conversations = relationship("Conversation", back_populates="vehicle", cascade="all, delete-orphan")
     share_links = relationship("ShareLink", back_populates="vehicle", cascade="all, delete-orphan")
+    fuel_entries = relationship("FuelEntry", back_populates="vehicle", cascade="all, delete-orphan")

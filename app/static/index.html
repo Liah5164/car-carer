@@ -312,9 +312,22 @@
                     <div x-show="selectedVehicle" class="mt-6" x-cloak>
                         <div class="bg-white rounded-xl shadow-sm border p-6">
                             <div class="flex items-center justify-between mb-6">
-                                <div>
-                                    <h3 class="text-xl font-bold" x-text="selectedVehicle?.name"></h3>
-                                    <p class="text-gray-500" x-text="selectedVehicle ? [selectedVehicle.brand, selectedVehicle.model, selectedVehicle.year ? '(' + selectedVehicle.year + ')' : ''].filter(Boolean).join(' ') : ''"></p>
+                                <div class="flex items-center gap-4">
+                                    <!-- Vehicle photo -->
+                                    <div class="relative group">
+                                        <div class="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden border-2 border-gray-200">
+                                            <img x-show="vehiclePhotoUrl" :src="vehiclePhotoUrl" class="w-full h-full object-cover" alt="">
+                                            <svg x-show="!vehiclePhotoUrl" class="w-7 h-7 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10m10 0H3m10 0h2m4 0h1a1 1 0 001-1v-4.586a1 1 0 00-.293-.707l-3.414-3.414A1 1 0 0016.586 6H13"/></svg>
+                                        </div>
+                                        <label class="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 cursor-pointer transition">
+                                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                            <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="uploadVehiclePhoto($event)">
+                                        </label>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-bold" x-text="selectedVehicle?.name"></h3>
+                                        <p class="text-gray-500" x-text="selectedVehicle ? [selectedVehicle.brand, selectedVehicle.model, selectedVehicle.year ? '(' + selectedVehicle.year + ')' : ''].filter(Boolean).join(' ') : ''"></p>
+                                    </div>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <button @click="createShareLink()" class="text-gray-400 hover:text-brand-600 transition" title="Partager">
@@ -445,6 +458,7 @@
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                     Calendrier
                                 </button>
+                                <button @click="detailTab = 'fuel'; loadFuel()" :class="detailTab === 'fuel' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap">Carburant</button>
                                 <button @click="detailTab = 'budget'; loadBudgetForecast(); loadPriceHistory()" :class="detailTab === 'budget' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap">Budget</button>
                                 <button @click="detailTab = 'quotes'; loadQuoteComparison()" :class="detailTab === 'quotes' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap">Devis</button>
                                 <button @click="detailTab = 'docs'" :class="detailTab === 'docs' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap">Documents</button>
@@ -774,6 +788,115 @@
                                 </div>
                                 <div x-show="!statsLoading && !stats" class="text-center py-10 text-gray-400">
                                     Aucune statistique disponible. Importez des documents pour commencer.
+                                </div>
+                            </div>
+
+                            <!-- Fuel tab -->
+                            <div x-show="detailTab === 'fuel'">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-bold text-gray-800">Suivi carburant</h3>
+                                    <button @click="showFuelForm = !showFuelForm" class="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 text-sm font-medium">+ Plein</button>
+                                </div>
+
+                                <!-- Warning -->
+                                <div x-show="fuelWarning" class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                                    <p class="text-yellow-800 text-sm font-medium" x-text="fuelWarning?.message"></p>
+                                </div>
+
+                                <!-- Add fuel form -->
+                                <div x-show="showFuelForm" class="bg-white border rounded-xl p-5 mb-6 shadow-sm">
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-gray-500 mb-1">Date *</label>
+                                            <input x-model="newFuel.date" type="date" class="w-full border rounded-lg px-3 py-2 text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-500 mb-1">Kilometrage *</label>
+                                            <input x-model="newFuel.mileage" type="number" placeholder="km" class="w-full border rounded-lg px-3 py-2 text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-500 mb-1">Litres *</label>
+                                            <input x-model="newFuel.liters" type="number" step="0.01" placeholder="L" class="w-full border rounded-lg px-3 py-2 text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-500 mb-1">Prix/litre</label>
+                                            <input x-model="newFuel.price_per_liter" type="number" step="0.001" placeholder="EUR/L" class="w-full border rounded-lg px-3 py-2 text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-500 mb-1">Station</label>
+                                            <input x-model="newFuel.station" type="text" placeholder="TotalEnergies..." class="w-full border rounded-lg px-3 py-2 text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-500 mb-1">Type carburant</label>
+                                            <select x-model="newFuel.fuel_type" class="w-full border rounded-lg px-3 py-2 text-sm">
+                                                <option value="">--</option>
+                                                <option>SP95</option><option>SP98</option><option>E10</option><option>E85</option><option>Diesel</option><option>GPL</option>
+                                            </select>
+                                        </div>
+                                        <div class="flex items-end">
+                                            <label class="flex items-center gap-2 text-sm">
+                                                <input x-model="newFuel.full_tank" type="checkbox" class="rounded">
+                                                Plein complet
+                                            </label>
+                                        </div>
+                                        <div class="flex items-end">
+                                            <button @click="addFuelEntry()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm w-full">Enregistrer</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Stats cards -->
+                                <div x-show="fuelStats" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                                    <div class="bg-white border rounded-xl p-4 text-center">
+                                        <p class="text-xs text-gray-500 mb-1">Consommation moy.</p>
+                                        <p class="text-2xl font-bold text-brand-600" x-text="fuelStats?.avg_consumption ? fuelStats.avg_consumption + ' L/100' : '--'"></p>
+                                    </div>
+                                    <div class="bg-white border rounded-xl p-4 text-center">
+                                        <p class="text-xs text-gray-500 mb-1">Cout / km</p>
+                                        <p class="text-2xl font-bold text-green-600" x-text="fuelStats?.avg_cost_per_km ? fuelStats.avg_cost_per_km + ' EUR' : '--'"></p>
+                                    </div>
+                                    <div class="bg-white border rounded-xl p-4 text-center">
+                                        <p class="text-xs text-gray-500 mb-1">Total litres</p>
+                                        <p class="text-2xl font-bold text-gray-700" x-text="(fuelStats?.total_liters || 0) + ' L'"></p>
+                                    </div>
+                                    <div class="bg-white border rounded-xl p-4 text-center">
+                                        <p class="text-xs text-gray-500 mb-1">Total depense carburant</p>
+                                        <p class="text-2xl font-bold text-orange-600" x-text="(fuelStats?.total_fuel_cost || 0).toLocaleString() + ' EUR'"></p>
+                                    </div>
+                                </div>
+
+                                <!-- Fuel entries list -->
+                                <div class="space-y-2">
+                                    <template x-for="entry in fuelEntries" :key="entry.id">
+                                        <div class="bg-white border rounded-lg p-3 flex items-center justify-between group hover:shadow-sm">
+                                            <div class="flex items-center gap-4">
+                                                <div class="text-sm">
+                                                    <span class="font-medium" x-text="entry.date"></span>
+                                                    <span class="text-gray-400 mx-1">|</span>
+                                                    <span x-text="entry.mileage?.toLocaleString() + ' km'"></span>
+                                                </div>
+                                                <div class="text-sm text-gray-600">
+                                                    <span class="font-semibold" x-text="entry.liters + ' L'"></span>
+                                                    <template x-if="entry.price_per_liter">
+                                                        <span x-text="' @ ' + entry.price_per_liter + ' EUR/L'"></span>
+                                                    </template>
+                                                </div>
+                                                <template x-if="entry.station">
+                                                    <span class="text-xs text-gray-400" x-text="entry.station"></span>
+                                                </template>
+                                                <template x-if="!entry.full_tank">
+                                                    <span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">partiel</span>
+                                                </template>
+                                            </div>
+                                            <div class="flex items-center gap-3">
+                                                <span class="font-semibold text-sm" x-text="entry.total_cost ? entry.total_cost.toFixed(2) + ' EUR' : ''"></span>
+                                                <button @click="deleteFuelEntry(entry.id)" class="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition" title="Supprimer">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="fuelEntries.length === 0 && !fuelLoading" class="text-center py-10 text-gray-400">Aucun plein enregistre</div>
                                 </div>
                             </div>
 

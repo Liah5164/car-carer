@@ -62,6 +62,15 @@ function app() {
         budgetForecast: null,
         priceHistory: null,
 
+        // Sprint 6: Fuel tracking
+        fuelEntries: [],
+        fuelStats: null,
+        fuelLoading: false,
+        newFuel: { date: '', mileage: '', liters: '', price_per_liter: '', station: '', fuel_type: '', full_tank: true },
+        fuelWarning: null,
+        showFuelForm: false,
+        vehiclePhotoUrl: null,
+
         // Chat state
         chatVehicleId: null,
         conversations: [],
@@ -204,6 +213,8 @@ function app() {
             this.batchResults = [];
             this.analysis = null;
             this.stats = null;
+            this.fuelWarning = null;
+            this.loadVehiclePhoto();
             await Promise.all([
                 this.loadMaintenance(v.id),
                 this.loadCTReports(v.id),
@@ -520,6 +531,69 @@ function app() {
                 a.download = `carnet_${this.selectedVehicle.name.replace(/\s/g, '_')}.pdf`;
                 a.click();
                 URL.revokeObjectURL(url);
+            }
+        },
+
+        // --- Sprint 6: Fuel tracking ---
+        async loadFuel() {
+            if (!this.selectedVehicle) return;
+            this.fuelLoading = true;
+            try {
+                const [entriesRes, statsRes] = await Promise.all([
+                    fetch(`/api/vehicles/${this.selectedVehicle.id}/fuel`),
+                    fetch(`/api/vehicles/${this.selectedVehicle.id}/fuel-stats`),
+                ]);
+                if (entriesRes.ok) this.fuelEntries = await entriesRes.json();
+                if (statsRes.ok) this.fuelStats = await statsRes.json();
+            } finally { this.fuelLoading = false; }
+        },
+
+        async addFuelEntry() {
+            if (!this.selectedVehicle) return;
+            const data = {
+                date: this.newFuel.date,
+                mileage: parseInt(this.newFuel.mileage),
+                liters: parseFloat(this.newFuel.liters),
+                price_per_liter: this.newFuel.price_per_liter ? parseFloat(this.newFuel.price_per_liter) : null,
+                station: this.newFuel.station || null,
+                fuel_type: this.newFuel.fuel_type || null,
+                full_tank: this.newFuel.full_tank,
+            };
+            const res = await fetch(`/api/vehicles/${this.selectedVehicle.id}/fuel`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+            });
+            if (res.ok) {
+                const result = await res.json();
+                this.fuelWarning = result.mileage_warning;
+                this.newFuel = { date: '', mileage: '', liters: '', price_per_liter: '', station: '', fuel_type: '', full_tank: true };
+                this.showFuelForm = false;
+                await this.loadFuel();
+            }
+        },
+
+        async deleteFuelEntry(entryId) {
+            if (!confirm('Supprimer cette entree carburant ?')) return;
+            await fetch(`/api/vehicles/${this.selectedVehicle.id}/fuel/${entryId}`, { method: 'DELETE' });
+            await this.loadFuel();
+        },
+
+        async uploadVehiclePhoto(event) {
+            const file = event.target.files[0];
+            if (!file || !this.selectedVehicle) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch(`/api/vehicles/${this.selectedVehicle.id}/photo`, { method: 'POST', body: formData });
+            if (res.ok) {
+                const data = await res.json();
+                this.vehiclePhotoUrl = `/api/vehicles/${this.selectedVehicle.id}/photo?t=${Date.now()}`;
+            }
+        },
+
+        loadVehiclePhoto() {
+            if (this.selectedVehicle && this.selectedVehicle.photo_path) {
+                this.vehiclePhotoUrl = `/api/vehicles/${this.selectedVehicle.id}/photo?t=${Date.now()}`;
+            } else {
+                this.vehiclePhotoUrl = null;
             }
         },
 

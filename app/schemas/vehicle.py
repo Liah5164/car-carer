@@ -38,6 +38,7 @@ class VehicleOut(BaseModel):
     fuel_type: Optional[str]
     initial_mileage: Optional[int]
     purchase_date: Optional[date]
+    photo_path: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -55,5 +56,31 @@ class VehicleSummary(BaseModel):
     total_spent: float
     document_count: int
     ct_count: int
+
+    model_config = {"from_attributes": True}
+
+
+class FuelEntryCreate(BaseModel):
+    date: date
+    mileage: int
+    liters: float
+    price_per_liter: Optional[float] = None
+    total_cost: Optional[float] = None
+    station: Optional[str] = None
+    fuel_type: Optional[str] = None
+    full_tank: bool = True
+
+
+class FuelEntryOut(BaseModel):
+    id: int
+    date: date
+    mileage: int
+    liters: float
+    price_per_liter: Optional[float]
+    total_cost: Optional[float]
+    station: Optional[str]
+    fuel_type: Optional[str]
+    full_tank: bool
+    created_at: datetime
 
     model_config = {"from_attributes": True}

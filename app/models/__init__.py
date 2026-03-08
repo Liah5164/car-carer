@@ -4,6 +4,7 @@ from app.models.document import Document
 from app.models.maintenance import MaintenanceEvent, MaintenanceItem
 from app.models.ct_report import CTReport, CTDefect
 from app.models.conversation import Conversation, Message
+from app.models.fuel import FuelEntry
 
 __all__ = [
     "User",
@@ -16,4 +17,5 @@ __all__ = [
     "CTDefect",
     "Conversation",
     "Message",
+    "FuelEntry",
 ]

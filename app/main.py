@@ -19,15 +19,17 @@ app.include_router(documents.router)
 app.include_router(chat.router)
 
 
-# Migrate existing DB: add user_id column if missing
+# Migrate existing DB: add missing columns
 def _migrate_db():
     import sqlalchemy
     insp = sqlalchemy.inspect(engine)
     if "vehicles" in insp.get_table_names():
         cols = [c["name"] for c in insp.get_columns("vehicles")]
-        if "user_id" not in cols:
-            with engine.begin() as conn:
+        with engine.begin() as conn:
+            if "user_id" not in cols:
                 conn.execute(sqlalchemy.text("ALTER TABLE vehicles ADD COLUMN user_id INTEGER REFERENCES users(id)"))
+            if "photo_path" not in cols:
+                conn.execute(sqlalchemy.text("ALTER TABLE vehicles ADD COLUMN photo_path VARCHAR(255)"))
 
 _migrate_db()
 
