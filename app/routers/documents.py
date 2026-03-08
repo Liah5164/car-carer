@@ -12,10 +12,12 @@ from sqlalchemy.orm import Session
 from app.config import UPLOAD_PATH
 from app.database import get_db, SessionLocal
 from app.models import Document, Vehicle, MaintenanceEvent, MaintenanceItem, CTReport, CTDefect
+from app.models.user import User
 from app.schemas.document import DocumentOut, ExtractionResult, DateConfirmation
 from app.schemas.maintenance import MaintenanceEventOut
 from app.schemas.ct_report import CTReportOut
 from app.services.extraction import extract_document
+from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -30,10 +32,11 @@ async def upload_and_extract(
     vehicle_id: int = Form(...),
     doc_type: str = Form("auto"),  # invoice, ct_report, quote, auto
     file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     vehicle = db.get(Vehicle, vehicle_id)
-    if not vehicle:
+    if not vehicle or (vehicle.user_id and vehicle.user_id != user.id):
         raise HTTPException(404, "Vehicule non trouve")
 
     mime = file.content_type or "application/octet-stream"
@@ -107,6 +110,7 @@ async def upload_and_extract(
 def confirm_document_date(
     document_id: int,
     body: DateConfirmation,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Confirm or correct the date of a pending document, then finalize extraction."""
@@ -136,11 +140,12 @@ async def batch_upload(
     vehicle_id: int = Form(...),
     doc_type: str = Form("auto"),
     files: list[UploadFile] = File(...),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Upload multiple files at once. Returns a batch_id to track progress via SSE."""
     vehicle = db.get(Vehicle, vehicle_id)
-    if not vehicle:
+    if not vehicle or (vehicle.user_id and vehicle.user_id != user.id):
         raise HTTPException(404, "Vehicule non trouve")
 
     batch_id = uuid.uuid4().hex[:12]
@@ -337,7 +342,7 @@ async def batch_status_sse(batch_id: str):
 
 
 @router.get("/pending/{vehicle_id}")
-def list_pending_documents(vehicle_id: int, db: Session = Depends(get_db)):
+def list_pending_documents(vehicle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """List documents that need date clarification (extracted=False with extraction_raw)."""
     docs = (
         db.query(Document)
@@ -550,7 +555,7 @@ def _create_ct_report(db: Session, vehicle_id: int, doc_id: int, data: dict) -> 
 
 
 @router.get("/{vehicle_id}", response_model=list[DocumentOut])
-def list_documents(vehicle_id: int, db: Session = Depends(get_db)):
+def list_documents(vehicle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return (
         db.query(Document)
         .filter(Document.vehicle_id == vehicle_id)
@@ -560,7 +565,7 @@ def list_documents(vehicle_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{vehicle_id}/maintenance", response_model=list[MaintenanceEventOut])
-def list_maintenance(vehicle_id: int, db: Session = Depends(get_db)):
+def list_maintenance(vehicle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from sqlalchemy.orm import joinedload
     return (
         db.query(MaintenanceEvent)
@@ -572,7 +577,7 @@ def list_maintenance(vehicle_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{vehicle_id}/ct-reports", response_model=list[CTReportOut])
-def list_ct_reports(vehicle_id: int, db: Session = Depends(get_db)):
+def list_ct_reports(vehicle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from sqlalchemy.orm import joinedload
     return (
         db.query(CTReport)

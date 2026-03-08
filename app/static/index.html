@@ -11,6 +11,7 @@
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <title>Care of your Car</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="/static/css/style.css">
     <script>
@@ -27,534 +28,1035 @@
 </head>
 <body class="bg-gray-50 min-h-screen" x-data="app()" x-init="init()">
 
-    <!-- Header -->
-    <header class="bg-brand-700 text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10m10 0H3m10 0h2m4 0h1a1 1 0 001-1v-4.586a1 1 0 00-.293-.707l-3.414-3.414A1 1 0 0016.586 6H13"/></svg>
-                <h1 class="text-xl font-bold">Care of your Car</h1>
+    <!-- ==================== LOGIN / REGISTER ==================== -->
+    <div x-show="!authenticated" class="min-h-screen flex items-center justify-center px-4" x-cloak>
+        <div class="w-full max-w-sm">
+            <div class="text-center mb-8">
+                <svg class="w-16 h-16 mx-auto text-brand-700 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10m10 0H3m10 0h2m4 0h1a1 1 0 001-1v-4.586a1 1 0 00-.293-.707l-3.414-3.414A1 1 0 0016.586 6H13"/></svg>
+                <h1 class="text-2xl font-bold text-gray-800">Care of your Car</h1>
+                <p class="text-gray-500 text-sm mt-1">Gerez l'entretien de vos vehicules intelligemment</p>
             </div>
-            <nav class="flex gap-1">
-                <button @click="view = 'vehicles'" :class="view === 'vehicles' ? 'bg-brand-600' : 'hover:bg-brand-600/50'" class="px-4 py-2 rounded-lg transition">Vehicules</button>
-                <button @click="view = 'chat'; loadConversations()" :class="view === 'chat' ? 'bg-brand-600' : 'hover:bg-brand-600/50'" class="px-4 py-2 rounded-lg transition">Chat</button>
-            </nav>
+            <div class="bg-white rounded-xl shadow-lg p-6 border">
+                <!-- Tab toggle -->
+                <div class="flex mb-6 bg-gray-100 rounded-lg p-1">
+                    <button @click="authView = 'login'" :class="authView === 'login' ? 'bg-white shadow text-brand-700' : 'text-gray-500'" class="flex-1 py-2 rounded-md text-sm font-medium transition">Connexion</button>
+                    <button @click="authView = 'register'" :class="authView === 'register' ? 'bg-white shadow text-brand-700' : 'text-gray-500'" class="flex-1 py-2 rounded-md text-sm font-medium transition">Inscription</button>
+                </div>
+
+                <!-- Error -->
+                <div x-show="authError" class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-4" x-text="authError"></div>
+
+                <!-- Login form -->
+                <form x-show="authView === 'login'" @submit.prevent="doLogin()" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input x-model="authEmail" type="email" required placeholder="vous@email.com" class="w-full border rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+                        <input x-model="authPassword" type="password" required placeholder="••••••••" class="w-full border rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                    </div>
+                    <button type="submit" :disabled="authLoading" class="w-full bg-brand-600 text-white py-2.5 rounded-lg hover:bg-brand-700 transition disabled:opacity-50 font-medium">
+                        <span x-show="!authLoading">Se connecter</span>
+                        <span x-show="authLoading" class="flex items-center justify-center gap-2">
+                            <div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                            Connexion...
+                        </span>
+                    </button>
+                </form>
+
+                <!-- Register form -->
+                <form x-show="authView === 'register'" @submit.prevent="doRegister()" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input x-model="authEmail" type="email" required placeholder="vous@email.com" class="w-full border rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+                        <input x-model="authPassword" type="password" required minlength="6" placeholder="6 caracteres minimum" class="w-full border rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                    </div>
+                    <button type="submit" :disabled="authLoading" class="w-full bg-brand-600 text-white py-2.5 rounded-lg hover:bg-brand-700 transition disabled:opacity-50 font-medium">
+                        <span x-show="!authLoading">Creer mon compte</span>
+                        <span x-show="authLoading" class="flex items-center justify-center gap-2">
+                            <div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                            Creation...
+                        </span>
+                    </button>
+                </form>
+            </div>
         </div>
-    </header>
+    </div>
 
-    <main class="max-w-7xl mx-auto px-4 py-6">
-
-        <!-- VEHICLES VIEW -->
-        <div x-show="view === 'vehicles'" x-cloak>
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-2xl font-bold text-gray-800">Mes vehicules</h2>
-                <button @click="showAddVehicle = true" class="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                    Ajouter
-                </button>
-            </div>
-
-            <!-- Vehicle cards -->
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4" x-show="vehicles.length > 0">
-                <template x-for="v in vehicles" :key="v.id">
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition cursor-pointer" @click="selectVehicle(v)">
-                        <div class="flex justify-between items-start mb-3">
-                            <div>
-                                <h3 class="font-bold text-lg text-gray-800" x-text="v.name"></h3>
-                                <p class="text-gray-500" x-text="[v.brand, v.model, v.year ? '(' + v.year + ')' : ''].filter(Boolean).join(' ') || 'Infos a completer via documents'"></p>
-                            </div>
-                            <span class="text-xs bg-brand-100 text-brand-700 px-2 py-1 rounded-full" x-text="v.plate_number || 'N/R'"></span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 text-sm text-gray-600">
-                            <div><span class="font-medium">Km:</span> <span x-text="v.last_mileage ? v.last_mileage.toLocaleString() : 'N/R'"></span></div>
-                            <div><span class="font-medium">Depense:</span> <span x-text="v.total_spent.toFixed(0) + ' EUR'"></span></div>
-                            <div><span class="font-medium">Documents:</span> <span x-text="v.document_count"></span></div>
-                            <div><span class="font-medium">CT:</span> <span x-text="v.ct_count"></span></div>
+    <!-- ==================== AUTHENTICATED APP ==================== -->
+    <template x-if="authenticated">
+        <div>
+            <!-- Header -->
+            <header class="bg-brand-700 text-white shadow-lg">
+                <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10m10 0H3m10 0h2m4 0h1a1 1 0 001-1v-4.586a1 1 0 00-.293-.707l-3.414-3.414A1 1 0 0016.586 6H13"/></svg>
+                        <h1 class="text-xl font-bold">Care of your Car</h1>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <nav class="flex gap-1">
+                            <button @click="view = 'dashboard'; loadDashboard()" :class="view === 'dashboard' ? 'bg-brand-600' : 'hover:bg-brand-600/50'" class="px-3 py-2 rounded-lg transition text-sm">Dashboard</button>
+                            <button @click="view = 'vehicles'" :class="view === 'vehicles' ? 'bg-brand-600' : 'hover:bg-brand-600/50'" class="px-3 py-2 rounded-lg transition text-sm">Vehicules</button>
+                            <button @click="view = 'chat'; loadConversations()" :class="view === 'chat' ? 'bg-brand-600' : 'hover:bg-brand-600/50'" class="px-3 py-2 rounded-lg transition text-sm">Chat</button>
+                        </nav>
+                        <div class="h-6 w-px bg-brand-500/50"></div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-brand-200 hidden sm:inline" x-text="currentUser?.email"></span>
+                            <button @click="doLogout()" class="text-brand-200 hover:text-white transition" title="Deconnexion">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                            </button>
                         </div>
                     </div>
-                </template>
-            </div>
-            <div x-show="vehicles.length === 0" class="text-center py-20 text-gray-400">
-                <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10m10 0H3m10 0h2m4 0h1a1 1 0 001-1v-4.586a1 1 0 00-.293-.707l-3.414-3.414A1 1 0 0016.586 6H13"/></svg>
-                <p class="text-lg">Aucun vehicule enregistre</p>
-                <p>Commencez par ajouter un vehicule</p>
-            </div>
-
-            <!-- Add Vehicle Modal -->
-            <div x-show="showAddVehicle" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-                <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-xl" @click.away="showAddVehicle = false">
-                    <h3 class="text-xl font-bold mb-4">Nouveau vehicule</h3>
-                    <form @submit.prevent="addVehicle()">
-                        <div class="space-y-3">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Nom du vehicule *</label>
-                                <input x-model="newVehicle.name" type="text" required placeholder="Ex: Berlingo familial, Clio de Julie..." class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
-                            </div>
-                            <p class="text-xs text-gray-400">Les autres informations (marque, modele, plaque...) seront remplies automatiquement a partir de vos documents.</p>
-                        </div>
-                        <div class="flex gap-3 mt-6">
-                            <button type="button" @click="showAddVehicle = false" class="flex-1 py-2 border rounded-lg hover:bg-gray-50">Annuler</button>
-                            <button type="submit" class="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700">Creer</button>
-                        </div>
-                    </form>
                 </div>
-            </div>
+            </header>
 
-            <!-- Vehicle Detail -->
-            <div x-show="selectedVehicle" class="mt-6" x-cloak>
-                <div class="bg-white rounded-xl shadow-sm border p-6">
+            <main class="max-w-7xl mx-auto px-4 py-6">
+
+                <!-- DASHBOARD VIEW -->
+                <div x-show="view === 'dashboard'" x-cloak>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Dashboard</h2>
+                    <div x-show="dashboardLoading" class="text-center py-10">
+                        <div class="animate-spin w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full mx-auto"></div>
+                    </div>
+                    <div x-show="!dashboardLoading && dashboard">
+                        <!-- Summary cards -->
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                            <div class="bg-white rounded-xl shadow-sm border p-4 text-center">
+                                <p class="text-3xl font-bold text-brand-600" x-text="dashboard?.summary?.vehicle_count || 0"></p>
+                                <p class="text-xs text-gray-500">Vehicule(s)</p>
+                            </div>
+                            <div class="bg-white rounded-xl shadow-sm border p-4 text-center">
+                                <p class="text-3xl font-bold" :class="(dashboard?.summary?.avg_health_score || 0) >= 60 ? 'text-green-600' : 'text-orange-600'" x-text="dashboard?.summary?.avg_health_score || 0"></p>
+                                <p class="text-xs text-gray-500">Score moyen</p>
+                            </div>
+                            <div class="bg-white rounded-xl shadow-sm border p-4 text-center">
+                                <p class="text-3xl font-bold text-red-600" x-text="dashboard?.summary?.total_critical || 0"></p>
+                                <p class="text-xs text-gray-500">Alertes critiques</p>
+                            </div>
+                            <div class="bg-white rounded-xl shadow-sm border p-4 text-center">
+                                <p class="text-3xl font-bold text-orange-600" x-text="dashboard?.summary?.total_warnings || 0"></p>
+                                <p class="text-xs text-gray-500">Avertissements</p>
+                            </div>
+                            <div class="bg-white rounded-xl shadow-sm border p-4 text-center">
+                                <p class="text-2xl font-bold text-gray-700" x-text="(dashboard?.summary?.total_spent || 0).toLocaleString() + ' EUR'"></p>
+                                <p class="text-xs text-gray-500">Total depense</p>
+                            </div>
+                        </div>
+
+                        <!-- Vehicle cards -->
+                        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <template x-for="v in (dashboard?.vehicles || [])" :key="v.id">
+                                <div class="bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition cursor-pointer" @click="view = 'vehicles'; $nextTick(() => { const veh = vehicles.find(x => x.id === v.id); if(veh) selectVehicle(veh); })">
+                                    <div class="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h3 class="font-bold text-gray-800" x-text="v.name"></h3>
+                                            <p class="text-sm text-gray-500" x-text="[v.brand, v.model].filter(Boolean).join(' ') || ''"></p>
+                                        </div>
+                                        <div class="text-center">
+                                            <span class="text-2xl font-bold" :class="v.health_color === 'green' ? 'text-green-600' : v.health_color === 'blue' ? 'text-blue-600' : v.health_color === 'orange' ? 'text-orange-600' : 'text-red-600'"
+                                                  x-text="v.health_score ?? '?'"></span>
+                                            <p class="text-xs" :class="v.health_color === 'green' ? 'text-green-500' : v.health_color === 'blue' ? 'text-blue-500' : v.health_color === 'orange' ? 'text-orange-500' : 'text-red-500'"
+                                               x-text="v.health_label || ''"></p>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-3 text-xs">
+                                        <span x-show="v.critical_alerts > 0" class="bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium" x-text="v.critical_alerts + ' critique(s)'"></span>
+                                        <span x-show="v.warning_alerts > 0" class="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium" x-text="v.warning_alerts + ' avert.'"></span>
+                                        <span class="text-gray-400" x-text="v.total_spent.toLocaleString() + ' EUR'"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VEHICLES VIEW -->
+                <div x-show="view === 'vehicles'" x-cloak>
                     <div class="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 class="text-xl font-bold" x-text="selectedVehicle?.name"></h3>
-                            <p class="text-gray-500" x-text="selectedVehicle ? [selectedVehicle.brand, selectedVehicle.model, selectedVehicle.year ? '(' + selectedVehicle.year + ')' : ''].filter(Boolean).join(' ') : ''"></p>
-                        </div>
-                        <button @click="selectedVehicle = null" class="text-gray-400 hover:text-gray-600">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        <h2 class="text-2xl font-bold text-gray-800">Mes vehicules</h2>
+                        <button @click="showAddVehicle = true" class="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Ajouter
                         </button>
                     </div>
 
-                    <!-- Upload -->
-                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center mb-6 hover:border-brand-400 transition"
-                         @dragover.prevent="dragOver = true" @dragleave="dragOver = false" @drop.prevent="handleDrop($event)"
-                         :class="dragOver ? 'border-brand-500 bg-brand-50' : ''">
-                        <svg class="w-10 h-10 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                        <p class="text-gray-600 mb-2">Glissez vos documents ici ou</p>
-                        <div class="flex gap-2 justify-center flex-wrap">
-                            <label class="cursor-pointer bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition inline-flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                Parcourir
-                                <input type="file" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple @change="handleFileSelect($event)">
-                            </label>
-                            <label class="cursor-pointer bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition inline-flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                Photo
-                                <input type="file" class="hidden" accept="image/*" capture="environment" @change="handleFileSelect($event)">
-                            </label>
-                        </div>
-                        <div class="mt-2 flex justify-center gap-3">
-                            <label class="text-sm text-gray-500">
-                                <input type="radio" x-model="uploadDocType" value="auto" class="mr-1"> Auto
-                            </label>
-                            <label class="text-sm text-gray-500">
-                                <input type="radio" x-model="uploadDocType" value="invoice" class="mr-1"> Facture
-                            </label>
-                            <label class="text-sm text-gray-500">
-                                <input type="radio" x-model="uploadDocType" value="ct_report" class="mr-1"> CT
-                            </label>
-                            <label class="text-sm text-gray-500">
-                                <input type="radio" x-model="uploadDocType" value="quote" class="mr-1"> Devis
-                            </label>
-                        </div>
-                        <!-- Single file upload spinner -->
-                        <div x-show="uploading && !batchProgress" class="mt-3">
-                            <div class="animate-spin w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full mx-auto"></div>
-                            <p class="text-sm text-brand-600 mt-1">Extraction en cours...</p>
-                        </div>
-                        <div x-show="uploadResult && !batchProgress" class="mt-3 text-sm" :class="uploadResult?.success ? 'text-green-600' : 'text-red-600'" x-text="uploadResult?.message"></div>
-                        <!-- Batch progress -->
-                        <div x-show="batchProgress" class="mt-4 text-left" x-cloak>
-                            <div class="flex justify-between text-sm mb-1">
-                                <span class="font-medium" x-text="'Analyse : ' + batchProgress?.processed + ' / ' + batchProgress?.total"></span>
-                                <span class="text-gray-500" x-text="batchProgress?.done ? 'Termine' : 'En cours...'"></span>
-                            </div>
-                            <div class="w-full bg-gray-200 rounded-full h-3 mb-3">
-                                <div class="bg-brand-600 h-3 rounded-full transition-all duration-300" :style="'width:' + (batchProgress ? (batchProgress.processed / batchProgress.total * 100) : 0) + '%'"></div>
-                            </div>
-                            <div class="max-h-40 overflow-y-auto space-y-1">
-                                <template x-for="(r, i) in batchResults" :key="i">
-                                    <div class="text-xs flex items-center gap-2 py-0.5">
-                                        <span :class="r.success ? 'text-green-500' : 'text-red-500'" x-text="r.success ? 'OK' : 'ERR'"></span>
-                                        <span class="truncate flex-1" x-text="r.filename"></span>
-                                        <span class="text-gray-400 whitespace-nowrap" x-text="r.message"></span>
-                                    </div>
-                                </template>
-                            </div>
-                            <div x-show="batchProgress?.done" class="mt-2 text-sm font-medium" :class="batchProgress?.error_count ? 'text-orange-600' : 'text-green-600'"
-                                 x-text="batchProgress ? batchProgress.success_count + ' reussi(s), ' + batchProgress.error_count + ' erreur(s)' : ''"></div>
-                        </div>
-                    </div>
-
-                    <!-- Pending documents banner -->
-                    <div x-show="pendingDocs.length > 0" class="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6" x-cloak>
-                        <div class="flex items-center gap-2 mb-2">
-                            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-                            <span class="font-medium text-amber-800" x-text="pendingDocs.length + ' document(s) en attente de confirmation de date'"></span>
-                        </div>
-                        <div class="space-y-2">
-                            <template x-for="p in pendingDocs" :key="p.id">
-                                <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-amber-200">
-                                    <div class="text-sm">
-                                        <span class="font-medium" x-text="p.original_filename"></span>
-                                        <span class="text-gray-500 ml-2" x-text="p.doc_type === 'ct_report' ? 'CT' : p.doc_type === 'invoice' ? 'Facture' : p.doc_type === 'quote' ? 'Devis' : p.doc_type"></span>
-                                        <span class="text-amber-600 ml-2" x-text="'Date extraite: ' + (p.extracted_date || '?')"></span>
-                                        <span class="text-gray-400 ml-2" x-text="p.garage_name ? '(' + p.garage_name + ')' : ''"></span>
-                                    </div>
-                                    <button @click="openClarifyFromPending(p)" class="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-amber-700 transition">
-                                        Confirmer la date
-                                    </button>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <!-- Tabs -->
-                    <div class="flex border-b mb-4">
-                        <button @click="detailTab = 'analysis'" :class="detailTab === 'analysis' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition flex items-center gap-1">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                            Bilan
-                            <span x-show="analysis && analysis.alerts.filter(a => (a.level === 'critical' || a.level === 'warning')).length > 0"
-                                  class="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
-                                  x-text="analysis ? analysis.alerts.filter(a => a.level === 'critical' || a.level === 'warning').length : ''"></span>
-                        </button>
-                        <button @click="detailTab = 'maintenance'" :class="detailTab === 'maintenance' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition">Entretiens</button>
-                        <button @click="detailTab = 'ct'" :class="detailTab === 'ct' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition">Controles techniques</button>
-                        <button @click="detailTab = 'docs'" :class="detailTab === 'docs' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition">Documents</button>
-                    </div>
-
-                    <!-- Analysis tab -->
-                    <div x-show="detailTab === 'analysis'">
-                        <div x-show="analysisLoading" class="text-center py-10">
-                            <div class="animate-spin w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full mx-auto"></div>
-                            <p class="text-sm text-gray-500 mt-2">Analyse en cours...</p>
-                        </div>
-                        <div x-show="!analysisLoading && analysis">
-                            <!-- CT Status -->
-                            <div x-show="analysis?.current_ct_status" class="mb-6">
-                                <div class="rounded-lg p-4 border"
-                                     :class="analysis?.current_ct_status?.result === 'favorable' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <h4 class="font-bold text-sm uppercase tracking-wide" :class="analysis?.current_ct_status?.result === 'favorable' ? 'text-green-700' : 'text-red-700'">Dernier controle technique</h4>
-                                            <p class="text-lg font-medium mt-1" x-text="analysis?.current_ct_status?.date + ' — ' + (analysis?.current_ct_status?.result || '').toUpperCase()"></p>
-                                            <p class="text-sm text-gray-600" x-text="(analysis?.current_ct_status?.mileage ? analysis.current_ct_status.mileage.toLocaleString() + ' km' : '') + (analysis?.current_ct_status?.center ? ' — ' + analysis.current_ct_status.center : '')"></p>
-                                        </div>
-                                        <div class="text-right">
-                                            <span class="text-3xl font-bold" :class="analysis?.current_ct_status?.result === 'favorable' ? 'text-green-600' : 'text-red-600'" x-text="analysis?.current_ct_status?.defect_count || 0"></span>
-                                            <p class="text-xs text-gray-500">defaut(s)</p>
-                                        </div>
-                                    </div>
-                                    <p x-show="analysis?.current_ct_status?.next_due" class="text-sm mt-2 text-gray-600" x-text="'Prochaine echeance : ' + (analysis?.current_ct_status?.next_due || '')"></p>
-                                </div>
-                            </div>
-
-                            <!-- Alerts -->
-                            <template x-if="analysis && analysis.alerts.filter(a => a.level === 'critical' && a.category !== 'interval').length > 0">
-                                <div class="mb-6">
-                                    <h4 class="font-bold text-red-700 mb-3 flex items-center gap-2">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-                                        Alertes critiques
-                                    </h4>
-                                    <div class="space-y-2">
-                                        <template x-for="a in analysis.alerts.filter(a => a.level === 'critical' && a.category !== 'interval')" :key="a.title">
-                                            <div class="border rounded-lg p-3 bg-red-50 border-red-200">
-                                                <div class="flex items-start gap-2">
-                                                    <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700 whitespace-nowrap mt-0.5">CRITIQUE</span>
-                                                    <div class="flex-1">
-                                                        <p class="font-medium text-red-800 text-sm" x-text="a.title"></p>
-                                                        <p class="text-xs text-red-700 mt-1 whitespace-pre-line" x-text="a.detail"></p>
-                                                    </div>
-                                                    <button @click="openAlertChat(a)" class="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition whitespace-nowrap flex-shrink-0">Comprendre</button>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-                            </template>
-
-                            <template x-if="analysis && analysis.alerts.filter(a => a.level === 'warning' && a.category !== 'interval').length > 0">
-                                <div class="mb-6">
-                                    <h4 class="font-bold text-orange-700 mb-3 flex items-center gap-2">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        Avertissements
-                                    </h4>
-                                    <div class="space-y-2">
-                                        <template x-for="a in analysis.alerts.filter(a => a.level === 'warning' && a.category !== 'interval')" :key="a.title">
-                                            <div class="border rounded-lg p-3 bg-orange-50 border-orange-200">
-                                                <div class="flex items-start gap-2">
-                                                    <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-700 whitespace-nowrap mt-0.5">ATTENTION</span>
-                                                    <div class="flex-1">
-                                                        <p class="font-medium text-orange-800 text-sm" x-text="a.title"></p>
-                                                        <p class="text-xs text-orange-700 mt-1 whitespace-pre-line" x-text="a.detail"></p>
-                                                    </div>
-                                                    <button @click="openAlertChat(a)" class="text-xs px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition whitespace-nowrap flex-shrink-0">Comprendre</button>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-                            </template>
-
-                            <!-- Maintenance intervals -->
-                            <div class="mb-6">
-                                <h4 class="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                    Intervalles d'entretien
-                                </h4>
-                                <div class="grid gap-2">
-                                    <template x-for="a in (analysis?.maintenance_intervals || [])" :key="a.title">
-                                        <div class="border rounded-lg p-3 flex items-center gap-3"
-                                             :class="a.level === 'warning' ? 'bg-orange-50 border-orange-200' : a.level === 'ok' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'">
-                                            <div class="flex-1">
-                                                <p class="font-medium text-sm" x-text="a.maintenance_type || a.title"></p>
-                                                <p class="text-xs text-gray-600 mt-0.5" x-text="a.last_date ? 'Dernier : ' + a.last_date + (a.last_km ? ' (' + a.last_km.toLocaleString() + ' km)' : '') : 'Aucun historique'"></p>
-                                            </div>
-                                            <div class="text-right flex items-center gap-2">
-                                                <span class="text-xs px-2 py-1 rounded-full font-bold"
-                                                      :class="a.level === 'warning' ? 'bg-orange-100 text-orange-700' : a.level === 'ok' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'"
-                                                      x-text="a.level === 'warning' ? 'EN RETARD' : a.level === 'ok' ? 'A JOUR' : 'INCONNU'"></span>
-                                                <button x-show="a.level !== 'ok'" @click="openAlertChat(a)" class="text-xs px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition" title="Discuter avec l'IA">?</button>
-                                            </div>
-                                        </div>
-                                    </template>
-                                </div>
-                            </div>
-
-                            <!-- Info alerts -->
-                            <template x-if="analysis && analysis.alerts.filter(a => a.level === 'info' && a.category !== 'interval').length > 0">
-                                <div class="mb-6">
-                                    <h4 class="font-bold text-blue-700 mb-3 flex items-center gap-2">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        Informations
-                                    </h4>
-                                    <div class="space-y-2">
-                                        <template x-for="a in analysis.alerts.filter(a => a.level === 'info' && a.category !== 'interval')" :key="a.title">
-                                            <div class="border rounded-lg p-3 bg-blue-50 border-blue-200">
-                                                <p class="font-medium text-blue-800 text-sm" x-text="a.title"></p>
-                                                <p class="text-xs text-blue-700 mt-1 whitespace-pre-line" x-text="a.detail"></p>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-                            </template>
-
-                            <div x-show="analysis && analysis.alerts.length === 0" class="text-center py-10 text-green-600">
-                                <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <p class="text-lg font-medium">Aucune alerte</p>
-                                <p class="text-sm text-gray-500">Votre vehicule est en bonne sante</p>
-                            </div>
-
-                            <!-- Alert Chat Panel -->
-                            <div x-show="alertChat" class="mt-6 border-2 border-brand-300 rounded-xl overflow-hidden" x-cloak>
-                                <div class="bg-brand-700 text-white px-4 py-3 flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-                                        <span class="font-medium text-sm truncate" x-text="alertChat?.title"></span>
-                                    </div>
-                                    <button @click="closeAlertChat()" class="text-white/70 hover:text-white">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                    </button>
-                                </div>
-                                <div x-ref="alertChatMessages" class="h-80 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                                    <template x-for="(msg, i) in alertMessages" :key="i">
-                                        <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
-                                            <div :class="msg.role === 'user' ? 'bg-brand-600 text-white' : 'bg-white text-gray-800 border'" class="max-w-[85%] rounded-2xl px-4 py-3 shadow-sm">
-                                                <div class="text-sm whitespace-pre-wrap" x-html="msg.role === 'assistant' ? formatMarkdown(msg.content) : msg.content"></div>
-                                            </div>
-                                        </div>
-                                    </template>
-                                    <div x-show="alertChatLoading" class="flex justify-start">
-                                        <div class="bg-white border rounded-2xl px-4 py-3 shadow-sm">
-                                            <div class="flex gap-1">
-                                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-                                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="border-t bg-white p-3">
-                                    <form @submit.prevent="sendAlertMessage()" class="flex gap-2">
-                                        <input x-model="alertChatInput" type="text" placeholder="Posez une question sur cette alerte..."
-                                               class="flex-1 border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                                               :disabled="alertChatLoading">
-                                        <button type="submit" :disabled="alertChatLoading || !alertChatInput.trim()" class="bg-brand-600 text-white px-4 rounded-xl hover:bg-brand-700 transition disabled:opacity-50 text-sm">
-                                            Envoyer
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Maintenance tab -->
-                    <div x-show="detailTab === 'maintenance'">
-                        <div x-show="maintenanceEvents.length === 0" class="text-center py-10 text-gray-400">
-                            Aucun entretien. Importez une facture pour commencer.
-                        </div>
-                        <div class="space-y-3">
-                            <template x-for="ev in maintenanceEvents" :key="ev.id">
-                                <div class="border rounded-lg p-4">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <div>
-                                            <span class="text-xs px-2 py-0.5 rounded-full" :class="ev.event_type === 'invoice' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'" x-text="ev.event_type === 'invoice' ? 'Facture' : 'Devis'"></span>
-                                            <span class="font-medium ml-2" x-text="ev.date"></span>
-                                            <span class="text-gray-500 ml-2" x-text="ev.mileage ? ev.mileage.toLocaleString() + ' km' : ''"></span>
-                                        </div>
-                                        <span class="font-bold text-brand-700" x-text="ev.total_cost ? ev.total_cost.toFixed(2) + ' EUR' : ''"></span>
-                                    </div>
-                                    <p class="text-sm text-gray-500 mb-2" x-text="ev.garage_name || ''"></p>
-                                    <div class="space-y-1">
-                                        <template x-for="item in ev.items" :key="item.id">
-                                            <div class="text-sm flex justify-between">
-                                                <span x-text="item.description"></span>
-                                                <span class="text-gray-500 ml-2 whitespace-nowrap" x-text="item.total_price ? item.total_price.toFixed(2) + ' EUR' : ''"></span>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <!-- CT tab -->
-                    <div x-show="detailTab === 'ct'">
-                        <div x-show="ctReports.length === 0" class="text-center py-10 text-gray-400">
-                            Aucun controle technique. Importez un PV de CT pour commencer.
-                        </div>
-                        <div class="space-y-3">
-                            <template x-for="ct in ctReports" :key="ct.id">
-                                <div class="border rounded-lg p-4">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <div>
-                                            <span class="font-medium" x-text="ct.date"></span>
-                                            <span class="text-gray-500 ml-2" x-text="ct.mileage ? ct.mileage.toLocaleString() + ' km' : ''"></span>
-                                            <span class="text-sm text-gray-400 ml-2" x-text="ct.center_name || ''"></span>
-                                        </div>
-                                        <span class="text-xs px-2 py-0.5 rounded-full font-medium"
-                                              :class="ct.result === 'favorable' ? 'bg-green-100 text-green-700' : ct.result === 'contre_visite' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'"
-                                              x-text="ct.result.toUpperCase()"></span>
-                                    </div>
-                                    <div x-show="ct.defects.length > 0" class="space-y-1 mt-2">
-                                        <template x-for="d in ct.defects" :key="d.id">
-                                            <div class="text-sm flex items-start gap-2">
-                                                <span class="text-xs px-1.5 py-0.5 rounded font-medium whitespace-nowrap"
-                                                      :class="d.severity === 'critique' ? 'bg-red-100 text-red-700' : d.severity === 'majeur' ? 'bg-orange-100 text-orange-700' : d.severity === 'mineur' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'"
-                                                      x-text="d.severity.toUpperCase()"></span>
-                                                <span x-text="(d.code ? d.code + ' — ' : '') + d.description"></span>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    <div x-show="ct.defects.length === 0" class="text-sm text-green-600 mt-1">Aucun defaut</div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <!-- Docs tab -->
-                    <div x-show="detailTab === 'docs'">
-                        <div x-show="documents.length === 0" class="text-center py-10 text-gray-400">Aucun document</div>
-                        <div class="space-y-2">
-                            <template x-for="doc in documents" :key="doc.id">
-                                <div class="flex items-center justify-between border rounded-lg p-3">
-                                    <div>
-                                        <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600" x-text="doc.doc_type"></span>
-                                        <span class="ml-2 text-sm" x-text="doc.original_filename"></span>
-                                    </div>
-                                    <div class="text-xs text-gray-400 flex items-center gap-2">
-                                        <span x-text="new Date(doc.uploaded_at).toLocaleDateString('fr-FR')"></span>
-                                        <span :class="doc.extracted ? 'text-green-500' : 'text-orange-500'" x-text="doc.extracted ? 'Extrait' : 'Non extrait'"></span>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- CHAT VIEW -->
-        <div x-show="view === 'chat'" class="h-[calc(100vh-120px)] flex gap-4" x-cloak>
-            <!-- Sidebar -->
-            <div class="w-72 bg-white rounded-xl shadow-sm border p-4 flex flex-col">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Vehicule</label>
-                    <select x-model.number="chatVehicleId" class="w-full border rounded-lg px-3 py-2 text-sm" @change="loadConversations()">
-                        <option :value="null">Tous</option>
+                    <!-- Vehicle cards -->
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4" x-show="vehicles.length > 0">
                         <template x-for="v in vehicles" :key="v.id">
-                            <option :value="v.id" x-text="v.name"></option>
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition cursor-pointer" @click="selectVehicle(v)">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h3 class="font-bold text-lg text-gray-800" x-text="v.name"></h3>
+                                        <p class="text-gray-500" x-text="[v.brand, v.model, v.year ? '(' + v.year + ')' : ''].filter(Boolean).join(' ') || 'Infos a completer via documents'"></p>
+                                    </div>
+                                    <span class="text-xs bg-brand-100 text-brand-700 px-2 py-1 rounded-full" x-text="v.plate_number || 'N/R'"></span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                                    <div><span class="font-medium">Km:</span> <span x-text="v.last_mileage ? v.last_mileage.toLocaleString() : 'N/R'"></span></div>
+                                    <div><span class="font-medium">Depense:</span> <span x-text="v.total_spent.toFixed(0) + ' EUR'"></span></div>
+                                    <div><span class="font-medium">Documents:</span> <span x-text="v.document_count"></span></div>
+                                    <div><span class="font-medium">CT:</span> <span x-text="v.ct_count"></span></div>
+                                </div>
+                            </div>
                         </template>
-                    </select>
-                </div>
-                <button @click="newConversation()" class="w-full bg-brand-600 text-white py-2 rounded-lg hover:bg-brand-700 transition text-sm mb-4">
-                    Nouvelle conversation
-                </button>
-                <div class="flex-1 overflow-y-auto space-y-1">
-                    <template x-for="c in conversations" :key="c.id">
-                        <div @click="selectConversation(c)"
-                             :class="currentConversation?.id === c.id ? 'bg-brand-50 border-brand-300' : 'hover:bg-gray-50 border-transparent'"
-                             class="p-2 rounded-lg cursor-pointer border transition">
-                            <p class="text-sm font-medium truncate" x-text="c.title || 'Sans titre'"></p>
-                            <p class="text-xs text-gray-400" x-text="c.message_count + ' messages'"></p>
-                        </div>
-                    </template>
-                </div>
-            </div>
+                    </div>
 
-            <!-- Chat area -->
-            <div class="flex-1 bg-white rounded-xl shadow-sm border flex flex-col">
-                <div x-ref="chatMessages" class="flex-1 overflow-y-auto p-6 space-y-4">
-                    <div x-show="!currentConversation" class="h-full flex items-center justify-center text-gray-400">
-                        <div class="text-center">
-                            <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-                            <p>Selectionnez ou creez une conversation</p>
-                        </div>
-                    </div>
-                    <template x-for="msg in chatMessages" :key="msg.id">
-                        <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
-                            <div :class="msg.role === 'user' ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-800'" class="max-w-[75%] rounded-2xl px-4 py-3">
-                                <div class="text-sm whitespace-pre-wrap" x-html="msg.role === 'assistant' ? formatMarkdown(msg.content) : msg.content"></div>
-                                <div class="text-xs mt-1 opacity-60" x-text="new Date(msg.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})"></div>
+                    <!-- Onboarding (empty state) -->
+                    <div x-show="vehicles.length === 0" class="text-center py-16">
+                        <svg class="w-20 h-20 mx-auto text-brand-300 mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10m10 0H3m10 0h2m4 0h1a1 1 0 001-1v-4.586a1 1 0 00-.293-.707l-3.414-3.414A1 1 0 0016.586 6H13"/></svg>
+                        <h3 class="text-xl font-bold text-gray-700 mb-2">Bienvenue sur Care of your Car !</h3>
+                        <p class="text-gray-500 mb-2 max-w-md mx-auto">Commencez par ajouter votre premier vehicule. Ensuite, importez vos factures et PV de controle technique pour un suivi intelligent.</p>
+                        <div class="flex justify-center gap-6 mt-6 text-sm text-gray-400">
+                            <div class="flex items-center gap-2">
+                                <span class="w-8 h-8 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center font-bold">1</span>
+                                Ajoutez un vehicule
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-8 h-8 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center font-bold">2</span>
+                                Importez des documents
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-8 h-8 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center font-bold">3</span>
+                                Consultez le bilan
                             </div>
                         </div>
-                    </template>
-                    <div x-show="chatLoading" class="flex justify-start">
-                        <div class="bg-gray-100 rounded-2xl px-4 py-3">
-                            <div class="flex gap-1">
-                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="border-t p-4">
-                    <form @submit.prevent="sendMessage()" class="flex gap-3">
-                        <input x-model="chatInput" type="text" placeholder="Posez votre question sur votre vehicule..."
-                               class="flex-1 border rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                               :disabled="chatLoading">
-                        <button type="submit" :disabled="chatLoading || !chatInput.trim()" class="bg-brand-600 text-white px-6 rounded-xl hover:bg-brand-700 transition disabled:opacity-50">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                        <button @click="showAddVehicle = true" class="mt-8 bg-brand-600 text-white px-6 py-3 rounded-lg hover:bg-brand-700 transition text-lg font-medium inline-flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Ajouter mon premier vehicule
                         </button>
-                    </form>
+                    </div>
+
+                    <!-- Add Vehicle Modal -->
+                    <div x-show="showAddVehicle" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-xl" @click.away="showAddVehicle = false">
+                            <h3 class="text-xl font-bold mb-4">Nouveau vehicule</h3>
+                            <form @submit.prevent="addVehicle()">
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Nom du vehicule *</label>
+                                        <input x-model="newVehicle.name" type="text" required placeholder="Ex: Berlingo familial, Clio de Julie..." class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                    <p class="text-xs text-gray-400">Les autres informations (marque, modele, plaque...) seront remplies automatiquement a partir de vos documents.</p>
+                                </div>
+                                <div class="flex gap-3 mt-6">
+                                    <button type="button" @click="showAddVehicle = false" class="flex-1 py-2 border rounded-lg hover:bg-gray-50">Annuler</button>
+                                    <button type="submit" class="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700">Creer</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Edit Vehicle Modal -->
+                    <div x-show="showEditVehicle" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                        <div class="bg-white rounded-xl p-6 w-full max-w-lg mx-4 shadow-xl max-h-[90vh] overflow-y-auto" @click.away="showEditVehicle = false">
+                            <h3 class="text-xl font-bold mb-4">Modifier le vehicule</h3>
+                            <form @submit.prevent="saveVehicle()">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                                        <input x-model="editVehicleData.name" type="text" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Marque</label>
+                                        <input x-model="editVehicleData.brand" type="text" placeholder="Citroen, Renault..." class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Modele</label>
+                                        <input x-model="editVehicleData.model" type="text" placeholder="Berlingo, Clio..." class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Annee</label>
+                                        <input x-model="editVehicleData.year" type="number" min="1900" max="2100" placeholder="2018" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Immatriculation</label>
+                                        <input x-model="editVehicleData.plate_number" type="text" placeholder="AB-123-CD" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">VIN</label>
+                                        <input x-model="editVehicleData.vin" type="text" placeholder="Numero de serie" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Carburant</label>
+                                        <select x-model="editVehicleData.fuel_type" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                            <option value="">--</option>
+                                            <option value="diesel">Diesel</option>
+                                            <option value="essence">Essence</option>
+                                            <option value="hybride">Hybride</option>
+                                            <option value="electrique">Electrique</option>
+                                            <option value="gpl">GPL</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Km initial</label>
+                                        <input x-model="editVehicleData.initial_mileage" type="number" min="0" placeholder="Ex: 85000" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Date d'achat</label>
+                                        <input x-model="editVehicleData.purchase_date" type="date" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                </div>
+                                <div class="flex gap-3 mt-6">
+                                    <button type="button" @click="showEditVehicle = false" class="flex-1 py-2 border rounded-lg hover:bg-gray-50">Annuler</button>
+                                    <button type="submit" class="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700">Enregistrer</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Vehicle Detail -->
+                    <div x-show="selectedVehicle" class="mt-6" x-cloak>
+                        <div class="bg-white rounded-xl shadow-sm border p-6">
+                            <div class="flex items-center justify-between mb-6">
+                                <div>
+                                    <h3 class="text-xl font-bold" x-text="selectedVehicle?.name"></h3>
+                                    <p class="text-gray-500" x-text="selectedVehicle ? [selectedVehicle.brand, selectedVehicle.model, selectedVehicle.year ? '(' + selectedVehicle.year + ')' : ''].filter(Boolean).join(' ') : ''"></p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button @click="createShareLink()" class="text-gray-400 hover:text-brand-600 transition" title="Partager">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                                    </button>
+                                    <button @click="exportPDF()" class="text-gray-400 hover:text-brand-600 transition" title="Exporter PDF">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    </button>
+                                    <button @click="openEditVehicle()" class="text-gray-400 hover:text-brand-600 transition" title="Modifier">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                    </button>
+                                    <button @click="selectedVehicle = null" class="text-gray-400 hover:text-gray-600">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Share link banner -->
+                            <div x-show="shareToken" class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 flex items-center gap-3" x-cloak>
+                                <svg class="w-5 h-5 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                                <input type="text" readonly :value="getShareUrl(shareToken)" class="flex-1 bg-white border rounded px-2 py-1 text-sm text-gray-600" @click="$el.select()">
+                                <button @click="copyShareUrl(shareToken)" class="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">Copier</button>
+                                <button @click="shareToken = null" class="text-gray-400 hover:text-gray-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+
+                            <!-- Upload -->
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center mb-6 hover:border-brand-400 transition"
+                                 @dragover.prevent="dragOver = true" @dragleave="dragOver = false" @drop.prevent="handleDrop($event)"
+                                 :class="dragOver ? 'border-brand-500 bg-brand-50' : ''">
+                                <svg class="w-10 h-10 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                                <p class="text-gray-600 mb-2">Glissez vos documents ici ou</p>
+                                <div class="flex gap-2 justify-center flex-wrap">
+                                    <label class="cursor-pointer bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition inline-flex items-center gap-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                        Parcourir
+                                        <input type="file" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple @change="handleFileSelect($event)">
+                                    </label>
+                                    <label class="cursor-pointer bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition inline-flex items-center gap-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                        Photo
+                                        <input type="file" class="hidden" accept="image/*" capture="environment" @change="handleFileSelect($event)">
+                                    </label>
+                                </div>
+                                <div class="mt-2 flex justify-center gap-3">
+                                    <label class="text-sm text-gray-500">
+                                        <input type="radio" x-model="uploadDocType" value="auto" class="mr-1"> Auto
+                                    </label>
+                                    <label class="text-sm text-gray-500">
+                                        <input type="radio" x-model="uploadDocType" value="invoice" class="mr-1"> Facture
+                                    </label>
+                                    <label class="text-sm text-gray-500">
+                                        <input type="radio" x-model="uploadDocType" value="ct_report" class="mr-1"> CT
+                                    </label>
+                                    <label class="text-sm text-gray-500">
+                                        <input type="radio" x-model="uploadDocType" value="quote" class="mr-1"> Devis
+                                    </label>
+                                </div>
+                                <!-- Single file upload spinner -->
+                                <div x-show="uploading && !batchProgress" class="mt-3">
+                                    <div class="animate-spin w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full mx-auto"></div>
+                                    <p class="text-sm text-brand-600 mt-1">Extraction en cours...</p>
+                                </div>
+                                <div x-show="uploadResult && !batchProgress" class="mt-3 text-sm" :class="uploadResult?.success ? 'text-green-600' : 'text-red-600'" x-text="uploadResult?.message"></div>
+                                <!-- Batch progress -->
+                                <div x-show="batchProgress" class="mt-4 text-left" x-cloak>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span class="font-medium" x-text="'Analyse : ' + batchProgress?.processed + ' / ' + batchProgress?.total"></span>
+                                        <span class="text-gray-500" x-text="batchProgress?.done ? 'Termine' : 'En cours...'"></span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-3 mb-3">
+                                        <div class="bg-brand-600 h-3 rounded-full transition-all duration-300" :style="'width:' + (batchProgress ? (batchProgress.processed / batchProgress.total * 100) : 0) + '%'"></div>
+                                    </div>
+                                    <div class="max-h-40 overflow-y-auto space-y-1">
+                                        <template x-for="(r, i) in batchResults" :key="i">
+                                            <div class="text-xs flex items-center gap-2 py-0.5">
+                                                <span :class="r.success ? 'text-green-500' : 'text-red-500'" x-text="r.success ? 'OK' : 'ERR'"></span>
+                                                <span class="truncate flex-1" x-text="r.filename"></span>
+                                                <span class="text-gray-400 whitespace-nowrap" x-text="r.message"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <div x-show="batchProgress?.done" class="mt-2 text-sm font-medium" :class="batchProgress?.error_count ? 'text-orange-600' : 'text-green-600'"
+                                         x-text="batchProgress ? batchProgress.success_count + ' reussi(s), ' + batchProgress.error_count + ' erreur(s)' : ''"></div>
+                                </div>
+                            </div>
+
+                            <!-- Pending documents banner -->
+                            <div x-show="pendingDocs.length > 0" class="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6" x-cloak>
+                                <div class="flex items-center gap-2 mb-2">
+                                    <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                                    <span class="font-medium text-amber-800" x-text="pendingDocs.length + ' document(s) en attente de confirmation de date'"></span>
+                                </div>
+                                <div class="space-y-2">
+                                    <template x-for="p in pendingDocs" :key="p.id">
+                                        <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-amber-200">
+                                            <div class="text-sm">
+                                                <span class="font-medium" x-text="p.original_filename"></span>
+                                                <span class="text-gray-500 ml-2" x-text="p.doc_type === 'ct_report' ? 'CT' : p.doc_type === 'invoice' ? 'Facture' : p.doc_type === 'quote' ? 'Devis' : p.doc_type"></span>
+                                                <span class="text-amber-600 ml-2" x-text="'Date extraite: ' + (p.extracted_date || '?')"></span>
+                                                <span class="text-gray-400 ml-2" x-text="p.garage_name ? '(' + p.garage_name + ')' : ''"></span>
+                                            </div>
+                                            <button @click="openClarifyFromPending(p)" class="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-amber-700 transition">
+                                                Confirmer la date
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Tabs -->
+                            <div class="flex border-b mb-4 overflow-x-auto">
+                                <button @click="detailTab = 'analysis'" :class="detailTab === 'analysis' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition flex items-center gap-1 whitespace-nowrap">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                    Bilan
+                                    <span x-show="analysis && analysis.alerts.filter(a => (a.level === 'critical' || a.level === 'warning')).length > 0"
+                                          class="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                                          x-text="analysis ? analysis.alerts.filter(a => a.level === 'critical' || a.level === 'warning').length : ''"></span>
+                                </button>
+                                <button @click="detailTab = 'maintenance'" :class="detailTab === 'maintenance' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap">Entretiens</button>
+                                <button @click="detailTab = 'ct'" :class="detailTab === 'ct' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap">CT</button>
+                                <button @click="detailTab = 'stats'; renderCharts()" :class="detailTab === 'stats' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap flex items-center gap-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                                    Stats
+                                </button>
+                                <button @click="detailTab = 'calendar'; loadCalendar()" :class="detailTab === 'calendar' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap flex items-center gap-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                    Calendrier
+                                </button>
+                                <button @click="detailTab = 'budget'; loadBudgetForecast(); loadPriceHistory()" :class="detailTab === 'budget' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap">Budget</button>
+                                <button @click="detailTab = 'quotes'; loadQuoteComparison()" :class="detailTab === 'quotes' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap">Devis</button>
+                                <button @click="detailTab = 'docs'" :class="detailTab === 'docs' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500'" class="px-4 py-2 border-b-2 font-medium transition whitespace-nowrap">Documents</button>
+                            </div>
+
+                            <!-- Analysis tab -->
+                            <div x-show="detailTab === 'analysis'">
+                                <div x-show="analysisLoading" class="text-center py-10">
+                                    <div class="animate-spin w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full mx-auto"></div>
+                                    <p class="text-sm text-gray-500 mt-2">Analyse en cours...</p>
+                                </div>
+                                <div x-show="!analysisLoading && analysis">
+                                    <!-- Health Score -->
+                                    <div x-show="analysis?.health_score" class="mb-6">
+                                        <div class="flex items-center gap-6 p-5 rounded-xl border bg-white">
+                                            <div class="relative w-24 h-24 flex-shrink-0">
+                                                <svg class="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+                                                    <circle cx="50" cy="50" r="42" stroke="#e5e7eb" stroke-width="8" fill="none"/>
+                                                    <circle cx="50" cy="50" r="42" stroke-width="8" fill="none" stroke-linecap="round"
+                                                            :stroke="analysis.health_score.color === 'green' ? '#22c55e' : analysis.health_score.color === 'blue' ? '#3b82f6' : analysis.health_score.color === 'orange' ? '#f59e0b' : '#ef4444'"
+                                                            :stroke-dasharray="2 * Math.PI * 42"
+                                                            :stroke-dashoffset="2 * Math.PI * 42 * (1 - analysis.health_score.score / 100)"/>
+                                                </svg>
+                                                <div class="absolute inset-0 flex items-center justify-center">
+                                                    <span class="text-2xl font-bold" x-text="analysis.health_score.score"></span>
+                                                </div>
+                                            </div>
+                                            <div class="flex-1">
+                                                <h4 class="text-lg font-bold" x-text="'Sante : ' + analysis.health_score.label"
+                                                    :class="analysis.health_score.color === 'green' ? 'text-green-600' : analysis.health_score.color === 'blue' ? 'text-blue-600' : analysis.health_score.color === 'orange' ? 'text-orange-600' : 'text-red-600'"></h4>
+                                                <div class="mt-2 space-y-1">
+                                                    <template x-for="(d, i) in (analysis.health_score.details || [])" :key="i">
+                                                        <p class="text-xs text-gray-500" x-text="d[0] + ' (' + d[1] + ' pts)'"></p>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- CT Status -->
+                                    <div x-show="analysis?.current_ct_status" class="mb-6">
+                                        <div class="rounded-lg p-4 border"
+                                             :class="analysis?.current_ct_status?.result === 'favorable' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <h4 class="font-bold text-sm uppercase tracking-wide" :class="analysis?.current_ct_status?.result === 'favorable' ? 'text-green-700' : 'text-red-700'">Dernier controle technique</h4>
+                                                    <p class="text-lg font-medium mt-1" x-text="analysis?.current_ct_status?.date + ' — ' + (analysis?.current_ct_status?.result || '').toUpperCase()"></p>
+                                                    <p class="text-sm text-gray-600" x-text="(analysis?.current_ct_status?.mileage ? analysis.current_ct_status.mileage.toLocaleString() + ' km' : '') + (analysis?.current_ct_status?.center ? ' — ' + analysis.current_ct_status.center : '')"></p>
+                                                </div>
+                                                <div class="text-right">
+                                                    <span class="text-3xl font-bold" :class="analysis?.current_ct_status?.result === 'favorable' ? 'text-green-600' : 'text-red-600'" x-text="analysis?.current_ct_status?.defect_count || 0"></span>
+                                                    <p class="text-xs text-gray-500">defaut(s)</p>
+                                                </div>
+                                            </div>
+                                            <p x-show="analysis?.current_ct_status?.next_due" class="text-sm mt-2 text-gray-600" x-text="'Prochaine echeance : ' + (analysis?.current_ct_status?.next_due || '')"></p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Alerts -->
+                                    <template x-if="analysis && analysis.alerts.filter(a => a.level === 'critical' && a.category !== 'interval').length > 0">
+                                        <div class="mb-6">
+                                            <h4 class="font-bold text-red-700 mb-3 flex items-center gap-2">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                                                Alertes critiques
+                                            </h4>
+                                            <div class="space-y-2">
+                                                <template x-for="a in analysis.alerts.filter(a => a.level === 'critical' && a.category !== 'interval')" :key="a.title">
+                                                    <div class="border rounded-lg p-3 bg-red-50 border-red-200">
+                                                        <div class="flex items-start gap-2">
+                                                            <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700 whitespace-nowrap mt-0.5">CRITIQUE</span>
+                                                            <div class="flex-1">
+                                                                <p class="font-medium text-red-800 text-sm" x-text="a.title"></p>
+                                                                <p class="text-xs text-red-700 mt-1 whitespace-pre-line" x-text="a.detail"></p>
+                                                            </div>
+                                                            <button @click="openAlertChat(a)" class="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition whitespace-nowrap flex-shrink-0">Comprendre</button>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="analysis && analysis.alerts.filter(a => a.level === 'warning' && a.category !== 'interval').length > 0">
+                                        <div class="mb-6">
+                                            <h4 class="font-bold text-orange-700 mb-3 flex items-center gap-2">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                Avertissements
+                                            </h4>
+                                            <div class="space-y-2">
+                                                <template x-for="a in analysis.alerts.filter(a => a.level === 'warning' && a.category !== 'interval')" :key="a.title">
+                                                    <div class="border rounded-lg p-3 bg-orange-50 border-orange-200">
+                                                        <div class="flex items-start gap-2">
+                                                            <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-700 whitespace-nowrap mt-0.5">ATTENTION</span>
+                                                            <div class="flex-1">
+                                                                <p class="font-medium text-orange-800 text-sm" x-text="a.title"></p>
+                                                                <p class="text-xs text-orange-700 mt-1 whitespace-pre-line" x-text="a.detail"></p>
+                                                            </div>
+                                                            <button @click="openAlertChat(a)" class="text-xs px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition whitespace-nowrap flex-shrink-0">Comprendre</button>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- Maintenance intervals -->
+                                    <div class="mb-6">
+                                        <h4 class="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            Intervalles d'entretien
+                                        </h4>
+                                        <div class="grid gap-2">
+                                            <template x-for="a in (analysis?.maintenance_intervals || [])" :key="a.title">
+                                                <div class="border rounded-lg p-3 flex items-center gap-3"
+                                                     :class="a.level === 'warning' ? 'bg-orange-50 border-orange-200' : a.level === 'ok' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'">
+                                                    <div class="flex-1">
+                                                        <p class="font-medium text-sm" x-text="a.maintenance_type || a.title"></p>
+                                                        <p class="text-xs text-gray-600 mt-0.5" x-text="a.last_date ? 'Dernier : ' + a.last_date + (a.last_km ? ' (' + a.last_km.toLocaleString() + ' km)' : '') : 'Aucun historique'"></p>
+                                                    </div>
+                                                    <div class="text-right flex items-center gap-2">
+                                                        <span class="text-xs px-2 py-1 rounded-full font-bold"
+                                                              :class="a.level === 'warning' ? 'bg-orange-100 text-orange-700' : a.level === 'ok' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'"
+                                                              x-text="a.level === 'warning' ? 'EN RETARD' : a.level === 'ok' ? 'A JOUR' : 'INCONNU'"></span>
+                                                        <button x-show="a.level !== 'ok'" @click="openAlertChat(a)" class="text-xs px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition" title="Discuter avec l'IA">?</button>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Info alerts -->
+                                    <template x-if="analysis && analysis.alerts.filter(a => a.level === 'info' && a.category !== 'interval').length > 0">
+                                        <div class="mb-6">
+                                            <h4 class="font-bold text-blue-700 mb-3 flex items-center gap-2">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                Informations
+                                            </h4>
+                                            <div class="space-y-2">
+                                                <template x-for="a in analysis.alerts.filter(a => a.level === 'info' && a.category !== 'interval')" :key="a.title">
+                                                    <div class="border rounded-lg p-3 bg-blue-50 border-blue-200">
+                                                        <p class="font-medium text-blue-800 text-sm" x-text="a.title"></p>
+                                                        <p class="text-xs text-blue-700 mt-1 whitespace-pre-line" x-text="a.detail"></p>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <div x-show="analysis && analysis.alerts.length === 0" class="text-center py-10 text-green-600">
+                                        <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        <p class="text-lg font-medium">Aucune alerte</p>
+                                        <p class="text-sm text-gray-500">Votre vehicule est en bonne sante</p>
+                                    </div>
+
+                                    <!-- Alert Chat Panel -->
+                                    <div x-show="alertChat" class="mt-6 border-2 border-brand-300 rounded-xl overflow-hidden" x-cloak>
+                                        <div class="bg-brand-700 text-white px-4 py-3 flex items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                                                <span class="font-medium text-sm truncate" x-text="alertChat?.title"></span>
+                                            </div>
+                                            <button @click="closeAlertChat()" class="text-white/70 hover:text-white">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                            </button>
+                                        </div>
+                                        <div x-ref="alertChatMessages" class="h-80 overflow-y-auto p-4 space-y-3 bg-gray-50">
+                                            <template x-for="(msg, i) in alertMessages" :key="i">
+                                                <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                                                    <div :class="msg.role === 'user' ? 'bg-brand-600 text-white' : 'bg-white text-gray-800 border'" class="max-w-[85%] rounded-2xl px-4 py-3 shadow-sm">
+                                                        <div class="text-sm whitespace-pre-wrap" x-html="msg.role === 'assistant' ? formatMarkdown(msg.content) : msg.content"></div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <div x-show="alertChatLoading" class="flex justify-start">
+                                                <div class="bg-white border rounded-2xl px-4 py-3 shadow-sm">
+                                                    <div class="flex gap-1">
+                                                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                                                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="border-t bg-white p-3">
+                                            <form @submit.prevent="sendAlertMessage()" class="flex gap-2">
+                                                <input x-model="alertChatInput" type="text" placeholder="Posez une question sur cette alerte..."
+                                                       class="flex-1 border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                                                       :disabled="alertChatLoading">
+                                                <button type="submit" :disabled="alertChatLoading || !alertChatInput.trim()" class="bg-brand-600 text-white px-4 rounded-xl hover:bg-brand-700 transition disabled:opacity-50 text-sm">
+                                                    Envoyer
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Maintenance tab -->
+                            <div x-show="detailTab === 'maintenance'">
+                                <!-- Filters bar -->
+                                <div class="flex flex-wrap gap-2 mb-4 items-end">
+                                    <div class="flex-1 min-w-[200px]">
+                                        <input x-model="maintenanceFilter.q" type="text" placeholder="Rechercher (piece, garage...)" @input.debounce.400ms="searchMaintenance()"
+                                               class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    </div>
+                                    <select x-model="maintenanceFilter.event_type" @change="searchMaintenance()" class="border rounded-lg px-3 py-2 text-sm">
+                                        <option value="">Tous types</option>
+                                        <option value="invoice">Factures</option>
+                                        <option value="quote">Devis</option>
+                                    </select>
+                                    <input x-model="maintenanceFilter.date_from" type="date" @change="searchMaintenance()" class="border rounded-lg px-2 py-2 text-sm" title="Date debut">
+                                    <input x-model="maintenanceFilter.date_to" type="date" @change="searchMaintenance()" class="border rounded-lg px-2 py-2 text-sm" title="Date fin">
+                                    <button x-show="filteredMaintenance !== null" @click="clearFilter()" class="text-xs text-gray-500 hover:text-red-500 px-2 py-2" title="Effacer filtres">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                    <button @click="exportCSV()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition flex items-center gap-1" title="Exporter CSV">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                        CSV
+                                    </button>
+                                </div>
+                                <div x-show="filteredMaintenance !== null" class="text-xs text-gray-400 mb-2" x-text="(filteredMaintenance?.length || 0) + ' resultat(s)'"></div>
+
+                                <div x-show="displayedMaintenance.length === 0" class="text-center py-10 text-gray-400">
+                                    <span x-text="filteredMaintenance !== null ? 'Aucun resultat' : 'Aucun entretien. Importez une facture pour commencer.'"></span>
+                                </div>
+                                <div class="space-y-3">
+                                    <template x-for="ev in displayedMaintenance" :key="ev.id">
+                                        <div class="border rounded-lg p-4 group">
+                                            <div class="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <span class="text-xs px-2 py-0.5 rounded-full" :class="ev.event_type === 'invoice' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'" x-text="ev.event_type === 'invoice' ? 'Facture' : 'Devis'"></span>
+                                                    <span class="font-medium ml-2" x-text="ev.date"></span>
+                                                    <span class="text-gray-500 ml-2" x-text="ev.mileage ? ev.mileage.toLocaleString() + ' km' : ''"></span>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-bold text-brand-700" x-text="ev.total_cost ? ev.total_cost.toFixed(2) + ' EUR' : ''"></span>
+                                                    <button @click="deleteMaintenanceEvent(ev.id)" class="text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100" title="Supprimer">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <p class="text-sm text-gray-500 mb-2" x-text="ev.garage_name || ''"></p>
+                                            <div class="space-y-1">
+                                                <template x-for="item in ev.items" :key="item.id">
+                                                    <div class="text-sm flex justify-between">
+                                                        <span x-text="item.description"></span>
+                                                        <span class="text-gray-500 ml-2 whitespace-nowrap" x-text="item.total_price ? item.total_price.toFixed(2) + ' EUR' : ''"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- CT tab -->
+                            <div x-show="detailTab === 'ct'">
+                                <div x-show="ctReports.length === 0" class="text-center py-10 text-gray-400">
+                                    Aucun controle technique. Importez un PV de CT pour commencer.
+                                </div>
+                                <div class="space-y-3">
+                                    <template x-for="ct in ctReports" :key="ct.id">
+                                        <div class="border rounded-lg p-4 group">
+                                            <div class="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <span class="font-medium" x-text="ct.date"></span>
+                                                    <span class="text-gray-500 ml-2" x-text="ct.mileage ? ct.mileage.toLocaleString() + ' km' : ''"></span>
+                                                    <span class="text-sm text-gray-400 ml-2" x-text="ct.center_name || ''"></span>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                                                          :class="ct.result === 'favorable' ? 'bg-green-100 text-green-700' : ct.result === 'contre_visite' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'"
+                                                          x-text="ct.result.toUpperCase()"></span>
+                                                    <button @click="deleteCTReport(ct.id)" class="text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100" title="Supprimer">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div x-show="ct.defects.length > 0" class="space-y-1 mt-2">
+                                                <template x-for="d in ct.defects" :key="d.id">
+                                                    <div class="text-sm flex items-start gap-2">
+                                                        <span class="text-xs px-1.5 py-0.5 rounded font-medium whitespace-nowrap"
+                                                              :class="d.severity === 'critique' ? 'bg-red-100 text-red-700' : d.severity === 'majeur' ? 'bg-orange-100 text-orange-700' : d.severity === 'mineur' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'"
+                                                              x-text="d.severity.toUpperCase()"></span>
+                                                        <span x-text="(d.code ? d.code + ' — ' : '') + d.description"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                            <div x-show="ct.defects.length === 0" class="text-sm text-green-600 mt-1">Aucun defaut</div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Stats tab -->
+                            <div x-show="detailTab === 'stats'">
+                                <div x-show="statsLoading" class="text-center py-10">
+                                    <div class="animate-spin w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full mx-auto"></div>
+                                </div>
+                                <div x-show="!statsLoading && stats">
+                                    <div class="grid md:grid-cols-2 gap-6 mb-6">
+                                        <!-- Spending chart -->
+                                        <div class="border rounded-lg p-4">
+                                            <h4 class="font-bold text-sm text-gray-700 mb-3">Depenses par mois (EUR)</h4>
+                                            <div x-show="stats?.spending_by_month?.length > 0">
+                                                <canvas x-ref="spendingChart" height="200"></canvas>
+                                            </div>
+                                            <p x-show="!stats?.spending_by_month?.length" class="text-sm text-gray-400 text-center py-8">Aucune donnee</p>
+                                        </div>
+                                        <!-- Mileage chart -->
+                                        <div class="border rounded-lg p-4">
+                                            <h4 class="font-bold text-sm text-gray-700 mb-3">Evolution du kilometrage</h4>
+                                            <div x-show="stats?.mileage_timeline?.length > 0">
+                                                <canvas x-ref="mileageChart" height="200"></canvas>
+                                            </div>
+                                            <p x-show="!stats?.mileage_timeline?.length" class="text-sm text-gray-400 text-center py-8">Aucune donnee</p>
+                                        </div>
+                                    </div>
+                                    <!-- Category chart -->
+                                    <div class="border rounded-lg p-4 max-w-md mx-auto">
+                                        <h4 class="font-bold text-sm text-gray-700 mb-3">Repartition des depenses par categorie</h4>
+                                        <div x-show="stats?.spending_by_category?.length > 0">
+                                            <canvas x-ref="categoryChart" height="250"></canvas>
+                                        </div>
+                                        <p x-show="!stats?.spending_by_category?.length" class="text-sm text-gray-400 text-center py-8">Aucune donnee</p>
+                                    </div>
+                                </div>
+                                <div x-show="!statsLoading && !stats" class="text-center py-10 text-gray-400">
+                                    Aucune statistique disponible. Importez des documents pour commencer.
+                                </div>
+                            </div>
+
+                            <!-- Budget tab -->
+                            <div x-show="detailTab === 'budget'">
+                                <div x-show="!budgetForecast" class="text-center py-10 text-gray-400">Chargement...</div>
+                                <div x-show="budgetForecast">
+                                    <!-- Forecast summary -->
+                                    <div class="grid md:grid-cols-3 gap-4 mb-6">
+                                        <div class="bg-white border rounded-xl p-5 text-center">
+                                            <p class="text-sm text-gray-500 mb-1">Budget previsionnel annuel</p>
+                                            <p class="text-3xl font-bold text-brand-600" x-text="(budgetForecast?.forecast || 0).toLocaleString() + ' EUR'"></p>
+                                        </div>
+                                        <div class="bg-white border rounded-xl p-5 text-center">
+                                            <p class="text-sm text-gray-500 mb-1">Moyenne historique / an</p>
+                                            <p class="text-3xl font-bold text-gray-700" x-text="(budgetForecast?.historical_avg || 0).toLocaleString() + ' EUR'"></p>
+                                        </div>
+                                        <div class="bg-white border rounded-xl p-5 text-center">
+                                            <p class="text-sm text-gray-500 mb-1">Exporter</p>
+                                            <button @click="exportBooklet()" class="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition text-sm">
+                                                Carnet d'entretien PDF
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Yearly history -->
+                                    <div x-show="budgetForecast?.yearly_history?.length > 0" class="mb-6">
+                                        <h4 class="font-bold text-gray-700 mb-3">Depenses par annee</h4>
+                                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <template x-for="y in (budgetForecast?.yearly_history || [])" :key="y.year">
+                                                <div class="bg-white border rounded-lg p-3 text-center">
+                                                    <p class="text-lg font-bold text-gray-700" x-text="y.amount.toLocaleString() + ' EUR'"></p>
+                                                    <p class="text-xs text-gray-400" x-text="y.year"></p>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Category breakdown -->
+                                    <div x-show="budgetForecast?.breakdown?.length > 0" class="mb-6">
+                                        <h4 class="font-bold text-gray-700 mb-3">Prevision par categorie</h4>
+                                        <div class="space-y-2">
+                                            <template x-for="b in (budgetForecast?.breakdown || []).slice(0, 10)" :key="b.category">
+                                                <div class="flex items-center gap-3">
+                                                    <span class="text-sm font-medium w-40 truncate" x-text="b.category"></span>
+                                                    <div class="flex-1 bg-gray-200 rounded-full h-4">
+                                                        <div class="bg-brand-500 h-4 rounded-full transition-all"
+                                                             :style="'width:' + Math.min(100, (b.yearly_avg / (budgetForecast?.forecast || 1)) * 100) + '%'"></div>
+                                                    </div>
+                                                    <span class="text-sm font-medium w-24 text-right" x-text="b.yearly_avg.toLocaleString() + ' EUR'"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Price history -->
+                                    <div x-show="priceHistory && Object.keys(priceHistory?.categories || {}).length > 0">
+                                        <h4 class="font-bold text-gray-700 mb-3">Evolution des prix par categorie</h4>
+                                        <div class="space-y-3">
+                                            <template x-for="[cat, points] in Object.entries(priceHistory?.categories || {})" :key="cat">
+                                                <div class="border rounded-lg p-3">
+                                                    <p class="font-medium text-sm mb-2" x-text="cat"></p>
+                                                    <div class="flex flex-wrap gap-2">
+                                                        <template x-for="(p, i) in points" :key="i">
+                                                            <div class="text-xs bg-gray-50 rounded px-2 py-1">
+                                                                <span class="text-gray-500" x-text="p.date"></span>
+                                                                <span class="font-medium ml-1" x-text="p.price + ' EUR'"></span>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Calendar tab -->
+                            <div x-show="detailTab === 'calendar'">
+                                <div x-show="calendarLoading" class="text-center py-10">
+                                    <div class="animate-spin w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full mx-auto"></div>
+                                </div>
+                                <div x-show="!calendarLoading">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <h4 class="font-bold text-gray-700">Prochaines echeances</h4>
+                                        <button @click="enableNotifications()" x-show="!notificationsEnabled"
+                                                class="text-xs bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg hover:bg-brand-200 transition flex items-center gap-1">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                                            Activer les notifications
+                                        </button>
+                                        <span x-show="notificationsEnabled" class="text-xs text-green-600 flex items-center gap-1">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4"/></svg>
+                                            Notifications actives
+                                        </span>
+                                    </div>
+                                    <div x-show="calendar.length === 0" class="text-center py-10 text-gray-400">
+                                        Aucune echeance prevue. Ajoutez des documents pour generer le calendrier.
+                                    </div>
+                                    <div class="space-y-2">
+                                        <template x-for="(item, i) in calendar" :key="i">
+                                            <div class="border rounded-lg p-4 flex items-center gap-4"
+                                                 :class="item.priority === 'overdue' ? 'bg-red-50 border-red-200' : item.priority === 'high' ? 'bg-orange-50 border-orange-200' : 'bg-white'">
+                                                <div class="text-center min-w-[60px]">
+                                                    <p class="text-2xl font-bold" :class="item.priority === 'overdue' ? 'text-red-600' : item.priority === 'high' ? 'text-orange-600' : 'text-brand-600'"
+                                                       x-text="item.due_date ? new Date(item.due_date + 'T00:00').toLocaleDateString('fr-FR', {day: '2-digit'}) : '?'"></p>
+                                                    <p class="text-xs text-gray-500" x-text="item.due_date ? new Date(item.due_date + 'T00:00').toLocaleDateString('fr-FR', {month: 'short', year: 'numeric'}) : ''"></p>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <p class="font-medium text-sm" x-text="item.type"></p>
+                                                    <p x-show="item.detail" class="text-xs text-gray-500 mt-0.5 truncate" x-text="item.detail"></p>
+                                                </div>
+                                                <span class="text-xs px-2 py-1 rounded-full font-bold"
+                                                      :class="item.priority === 'overdue' ? 'bg-red-100 text-red-700' : item.priority === 'high' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'"
+                                                      x-text="item.priority === 'overdue' ? 'EN RETARD' : item.priority === 'high' ? 'URGENT' : 'PREVU'"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quotes comparison tab -->
+                            <div x-show="detailTab === 'quotes'">
+                                <div x-show="!quoteComparison || quoteComparison.quotes.length === 0" class="text-center py-10 text-gray-400">
+                                    Aucun devis. Importez des devis pour comparer les prix.
+                                </div>
+                                <div x-show="quoteComparison && quoteComparison.quotes.length > 0">
+                                    <h4 class="font-bold text-gray-700 mb-4">Comparaison des devis</h4>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm border-collapse">
+                                            <thead>
+                                                <tr class="bg-gray-50">
+                                                    <th class="text-left p-3 border-b font-medium text-gray-600">Categorie</th>
+                                                    <template x-for="(q, qi) in (quoteComparison?.quotes || [])" :key="qi">
+                                                        <th class="text-right p-3 border-b font-medium text-gray-600 min-w-[120px]">
+                                                            <div x-text="q.garage || ('Devis ' + (qi+1))"></div>
+                                                            <div class="text-xs text-gray-400 font-normal" x-text="q.date || ''"></div>
+                                                        </th>
+                                                    </template>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="cat in (quoteComparison?.categories || [])" :key="cat">
+                                                    <tr class="border-b hover:bg-gray-50">
+                                                        <td class="p-3 font-medium" x-text="cat"></td>
+                                                        <template x-for="(q, qi) in (quoteComparison?.quotes || [])" :key="qi">
+                                                            <td class="p-3 text-right" x-text="q.items_by_category[cat] ? q.items_by_category[cat].toFixed(2) + ' EUR' : '—'"></td>
+                                                        </template>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                            <tfoot>
+                                                <tr class="bg-gray-50 font-bold">
+                                                    <td class="p-3">TOTAL</td>
+                                                    <template x-for="(q, qi) in (quoteComparison?.quotes || [])" :key="qi">
+                                                        <td class="p-3 text-right" :class="quoteComparison.quotes.every(oq => q.total <= oq.total) ? 'text-green-600' : ''"
+                                                            x-text="q.total.toFixed(2) + ' EUR'"></td>
+                                                    </template>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Docs tab -->
+                            <div x-show="detailTab === 'docs'">
+                                <div x-show="documents.length === 0" class="text-center py-10 text-gray-400">Aucun document</div>
+                                <div class="space-y-2">
+                                    <template x-for="doc in documents" :key="doc.id">
+                                        <div class="flex items-center justify-between border rounded-lg p-3">
+                                            <div>
+                                                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600" x-text="doc.doc_type"></span>
+                                                <span class="ml-2 text-sm" x-text="doc.original_filename"></span>
+                                            </div>
+                                            <div class="text-xs text-gray-400 flex items-center gap-2">
+                                                <span x-text="new Date(doc.uploaded_at).toLocaleDateString('fr-FR')"></span>
+                                                <span :class="doc.extracted ? 'text-green-500' : 'text-orange-500'" x-text="doc.extracted ? 'Extrait' : 'Non extrait'"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+
+                <!-- CHAT VIEW -->
+                <div x-show="view === 'chat'" class="h-[calc(100vh-120px)] flex gap-4" x-cloak>
+                    <!-- Sidebar (hidden on mobile, toggle via button) -->
+                    <div class="hidden md:flex w-72 bg-white rounded-xl shadow-sm border p-4 flex-col">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Vehicule</label>
+                            <select x-model.number="chatVehicleId" class="w-full border rounded-lg px-3 py-2 text-sm" @change="loadConversations()">
+                                <option :value="null">Tous</option>
+                                <template x-for="v in vehicles" :key="v.id">
+                                    <option :value="v.id" x-text="v.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <button @click="newConversation()" class="w-full bg-brand-600 text-white py-2 rounded-lg hover:bg-brand-700 transition text-sm mb-4">
+                            Nouvelle conversation
+                        </button>
+                        <div class="flex-1 overflow-y-auto space-y-1">
+                            <template x-for="c in conversations" :key="c.id">
+                                <div @click="selectConversation(c)"
+                                     :class="currentConversation?.id === c.id ? 'bg-brand-50 border-brand-300' : 'hover:bg-gray-50 border-transparent'"
+                                     class="p-2 rounded-lg cursor-pointer border transition">
+                                    <p class="text-sm font-medium truncate" x-text="c.title || 'Sans titre'"></p>
+                                    <p class="text-xs text-gray-400" x-text="c.message_count + ' messages'"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Chat area -->
+                    <div class="flex-1 bg-white rounded-xl shadow-sm border flex flex-col">
+                        <div x-ref="chatMessages" class="flex-1 overflow-y-auto p-6 space-y-4">
+                            <div x-show="!currentConversation" class="h-full flex items-center justify-center text-gray-400">
+                                <div class="text-center">
+                                    <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                                    <p>Selectionnez ou creez une conversation</p>
+                                </div>
+                            </div>
+                            <template x-for="msg in chatMessages" :key="msg.id">
+                                <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                                    <div :class="msg.role === 'user' ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-800'" class="max-w-[75%] rounded-2xl px-4 py-3">
+                                        <div class="text-sm whitespace-pre-wrap" x-html="msg.role === 'assistant' ? formatMarkdown(msg.content) : msg.content"></div>
+                                        <div class="text-xs mt-1 opacity-60" x-text="new Date(msg.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})"></div>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="chatLoading" class="flex justify-start">
+                                <div class="bg-gray-100 rounded-2xl px-4 py-3">
+                                    <div class="flex gap-1">
+                                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="border-t p-4">
+                            <form @submit.prevent="sendMessage()" class="flex gap-3">
+                                <input x-model="chatInput" type="text" placeholder="Posez votre question sur votre vehicule..."
+                                       class="flex-1 border rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                                       :disabled="chatLoading">
+                                <button type="submit" :disabled="chatLoading || !chatInput.trim()" class="bg-brand-600 text-white px-6 rounded-xl hover:bg-brand-700 transition disabled:opacity-50">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Date Clarification Modal -->
+                <div x-show="showClarifyModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                    <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-xl" @click.away="showClarifyModal = false">
+                        <div class="flex items-center gap-2 mb-4">
+                            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            <h3 class="text-xl font-bold">Confirmer la date</h3>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-4">La date extraite de ce document n'est pas fiable (illisible, floue, ou possiblement la date du scan). Veuillez confirmer ou corriger :</p>
+                        <div class="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
+                            <div x-show="clarifyDoc?.filename"><span class="font-medium">Fichier :</span> <span x-text="clarifyDoc?.filename"></span></div>
+                            <div><span class="font-medium">Type :</span> <span x-text="clarifyDoc?.doc_type === 'ct_report' ? 'Controle technique' : clarifyDoc?.doc_type === 'invoice' ? 'Facture' : clarifyDoc?.doc_type === 'quote' ? 'Devis' : clarifyDoc?.doc_type"></span></div>
+                            <div x-show="clarifyDoc?.garage_name"><span class="font-medium">Garage :</span> <span x-text="clarifyDoc?.garage_name"></span></div>
+                            <div x-show="clarifyDoc?.mileage"><span class="font-medium">Km :</span> <span x-text="clarifyDoc?.mileage?.toLocaleString()"></span></div>
+                            <div x-show="clarifyDoc?.total_cost"><span class="font-medium">Montant :</span> <span x-text="clarifyDoc?.total_cost + ' EUR'"></span></div>
+                            <div><span class="font-medium">Date extraite :</span> <span class="text-amber-600 font-medium" x-text="clarifyDoc?.extracted_date || 'Non lisible'"></span></div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Date corrigee *</label>
+                            <input x-model="clarifyDate" type="date" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="button" @click="showClarifyModal = false" class="flex-1 py-2 border rounded-lg hover:bg-gray-50">Annuler</button>
+                            <button type="button" @click="confirmDate()" class="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700">Confirmer</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
         </div>
-        <!-- Date Clarification Modal -->
-        <div x-show="showClarifyModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-            <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-xl" @click.away="showClarifyModal = false">
-                <div class="flex items-center gap-2 mb-4">
-                    <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                    <h3 class="text-xl font-bold">Confirmer la date</h3>
-                </div>
-                <p class="text-sm text-gray-600 mb-4">La date extraite de ce document n'est pas fiable (illisible, floue, ou possiblement la date du scan). Veuillez confirmer ou corriger :</p>
-                <div class="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
-                    <div x-show="clarifyDoc?.filename"><span class="font-medium">Fichier :</span> <span x-text="clarifyDoc?.filename"></span></div>
-                    <div><span class="font-medium">Type :</span> <span x-text="clarifyDoc?.doc_type === 'ct_report' ? 'Controle technique' : clarifyDoc?.doc_type === 'invoice' ? 'Facture' : clarifyDoc?.doc_type === 'quote' ? 'Devis' : clarifyDoc?.doc_type"></span></div>
-                    <div x-show="clarifyDoc?.garage_name"><span class="font-medium">Garage :</span> <span x-text="clarifyDoc?.garage_name"></span></div>
-                    <div x-show="clarifyDoc?.mileage"><span class="font-medium">Km :</span> <span x-text="clarifyDoc?.mileage?.toLocaleString()"></span></div>
-                    <div x-show="clarifyDoc?.total_cost"><span class="font-medium">Montant :</span> <span x-text="clarifyDoc?.total_cost + ' EUR'"></span></div>
-                    <div><span class="font-medium">Date extraite :</span> <span class="text-amber-600 font-medium" x-text="clarifyDoc?.extracted_date || 'Non lisible'"></span></div>
-                </div>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Date corrigee *</label>
-                    <input x-model="clarifyDate" type="date" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
-                </div>
-                <div class="flex gap-3">
-                    <button type="button" @click="showClarifyModal = false" class="flex-1 py-2 border rounded-lg hover:bg-gray-50">Annuler</button>
-                    <button type="button" @click="confirmDate()" class="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700">Confirmer</button>
-                </div>
-            </div>
-        </div>
-    </main>
+    </template>
 
     <script src="/static/js/app.js"></script>
     <script>

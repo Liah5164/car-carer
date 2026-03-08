@@ -46,6 +46,8 @@ def analyze_vehicle(db: Session, vehicle_id: int) -> dict:
     alerts.extend(unresolved)
     alerts.sort(key=lambda a: {"critical": 0, "warning": 1, "info": 2}.get(a["level"], 3))
 
+    health_score = _compute_health_score(ct_analysis, interval_alerts, unresolved)
+
     return {
         "vehicle_id": vehicle_id,
         "vehicle_name": vehicle.name,
@@ -54,6 +56,7 @@ def analyze_vehicle(db: Session, vehicle_id: int) -> dict:
         "alerts": alerts,
         "maintenance_intervals": interval_alerts,
         "unresolved_defects": unresolved,
+        "health_score": health_score,
     }
 
 
@@ -414,3 +417,54 @@ def _get_latest_mileage(db: Session, vehicle_id: int) -> int | None:
 
 def _months_between(d1: date, d2: date) -> int:
     return (d2.year - d1.year) * 12 + (d2.month - d1.month)
+
+
+def _compute_health_score(ct_analysis: dict, intervals: list[dict], unresolved: list[dict]) -> dict:
+    """Compute a 0-100 health score based on vehicle state."""
+    score = 100
+    details = []
+
+    # CT status (max -40)
+    status = ct_analysis.get("current_status")
+    if not status:
+        score -= 10
+        details.append(("Aucun CT enregistre", -10))
+    else:
+        if status["result"] in ("defavorable", "contre_visite"):
+            score -= 30
+            details.append(("CT defavorable", -30))
+        ct_alerts = [a for a in ct_analysis.get("alerts", []) if a["category"] == "ct"]
+        for a in ct_alerts:
+            if "en retard" in a["title"].lower():
+                score -= 20
+                details.append(("CT en retard", -20))
+                break
+            elif "bientot" in a["title"].lower():
+                score -= 5
+                details.append(("CT bientot du", -5))
+                break
+
+    # Maintenance intervals (max -30)
+    overdue = [i for i in intervals if i["level"] == "warning"]
+    unknown = [i for i in intervals if i["level"] == "info"]
+    if overdue:
+        penalty = min(len(overdue) * 5, 30)
+        score -= penalty
+        details.append((f"{len(overdue)} entretien(s) en retard", -penalty))
+    if unknown:
+        penalty = min(len(unknown) * 2, 10)
+        score -= penalty
+        details.append((f"{len(unknown)} entretien(s) sans historique", -penalty))
+
+    # Unresolved defects (max -30)
+    critical_unresolved = [u for u in unresolved if u["level"] == "critical"]
+    if critical_unresolved:
+        penalty = min(len(critical_unresolved) * 10, 30)
+        score -= penalty
+        details.append((f"{len(critical_unresolved)} defaut(s) CT non resolu(s)", -penalty))
+
+    score = max(0, min(100, score))
+    label = "Excellent" if score >= 80 else "Bon" if score >= 60 else "Moyen" if score >= 40 else "Critique"
+    color = "green" if score >= 80 else "blue" if score >= 60 else "orange" if score >= 40 else "red"
+
+    return {"score": score, "label": label, "color": color, "details": details}
