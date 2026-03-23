@@ -31,7 +31,17 @@ Car Carer ist eine selbst gehostete Webanwendung zur Verfolgung der Fahrzeugwart
 
 ## Screenshots
 
-> *Kommt bald* -- Die Anwendung befindet sich in aktiver Entwicklung.
+| Dashboard | Dokumenten-Upload |
+|:---------:|:-----------------:|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Upload](docs/screenshots/upload.png) |
+
+| KI-Chat | Kraftstoffverbrauch |
+|:-------:|:-------------------:|
+| ![Chat](docs/screenshots/chat.png) | ![Kraftstoff](docs/screenshots/fuel.png) |
+
+| Steuern & Versicherung | Fahrzeug teilen |
+|:-----------------------:|:---------------:|
+| ![Steuern](docs/screenshots/taxes.png) | ![Teilen](docs/screenshots/sharing.png) |
 
 ---
 

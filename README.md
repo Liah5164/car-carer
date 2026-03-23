@@ -28,7 +28,17 @@ Car Carer is a self-hosted web application that keeps track of your car maintena
 
 ## Screenshots
 
-> _TODO: Add screenshots of the vehicle dashboard, document upload, and chat interface._
+| Dashboard | Document Upload |
+|:---------:|:---------------:|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Upload](docs/screenshots/upload.png) |
+
+| AI Chat | Fuel Tracking |
+|:-------:|:-------------:|
+| ![Chat](docs/screenshots/chat.png) | ![Fuel](docs/screenshots/fuel.png) |
+
+| Taxes & Insurance | Vehicle Sharing |
+|:-----------------:|:---------------:|
+| ![Taxes](docs/screenshots/taxes.png) | ![Sharing](docs/screenshots/sharing.png) |
 
 ## Quick Start
 

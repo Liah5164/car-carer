@@ -29,9 +29,19 @@ Car Carer est une application web auto-hebergee de suivi d'entretien automobile.
 
 ---
 
-## 📸 Captures d'ecran
+## Captures d'ecran
 
-> *A venir*
+| Tableau de bord | Import de documents |
+|:---------------:|:-------------------:|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Upload](docs/screenshots/upload.png) |
+
+| Chat IA | Suivi carburant |
+|:-------:|:---------------:|
+| ![Chat](docs/screenshots/chat.png) | ![Carburant](docs/screenshots/fuel.png) |
+
+| Taxes & Assurances | Partage vehicule |
+|:------------------:|:----------------:|
+| ![Taxes](docs/screenshots/taxes.png) | ![Partage](docs/screenshots/sharing.png) |
 
 ---
 

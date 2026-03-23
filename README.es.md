@@ -31,7 +31,17 @@ Car Carer es una aplicacion web autoalojada para el seguimiento completo del man
 
 ## Capturas de pantalla
 
-> :construction: Proximamente
+| Panel principal | Carga de documentos |
+|:---------------:|:-------------------:|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Upload](docs/screenshots/upload.png) |
+
+| Chat IA | Seguimiento de combustible |
+|:-------:|:--------------------------:|
+| ![Chat](docs/screenshots/chat.png) | ![Combustible](docs/screenshots/fuel.png) |
+
+| Impuestos y Seguros | Compartir vehiculo |
+|:--------------------:|:------------------:|
+| ![Impuestos](docs/screenshots/taxes.png) | ![Compartir](docs/screenshots/sharing.png) |
 
 ---
 
