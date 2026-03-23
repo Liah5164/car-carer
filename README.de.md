@@ -6,7 +6,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-green.svg)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-willkommen-brightgreen.svg)](https://github.com/your-repo/care-of-your-car/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-willkommen-brightgreen.svg)](https://github.com/Greal-dev/car-carer/pulls)
 
 ---
 
@@ -40,7 +40,7 @@ Car Carer ist eine selbst gehostete Webanwendung zur Verfolgung der Fahrzeugwart
 ### 1. Repository klonen
 
 ```bash
-git clone https://github.com/your-repo/care-of-your-car.git
+git clone https://github.com/Greal-dev/car-carer.git
 cd care-of-your-car
 ```
 
@@ -204,7 +204,7 @@ Beitraege sind herzlich willkommen! So koennen Sie mitmachen:
 
 ### Fehler melden
 
-Haben Sie einen Fehler gefunden oder eine Idee fuer eine Verbesserung? Eroeffnen Sie gerne ein [Issue](https://github.com/your-repo/care-of-your-car/issues).
+Haben Sie einen Fehler gefunden oder eine Idee fuer eine Verbesserung? Eroeffnen Sie gerne ein [Issue](https://github.com/Greal-dev/car-carer/issues).
 
 ---
 

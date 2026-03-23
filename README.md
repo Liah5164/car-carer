@@ -32,14 +32,28 @@ Car Carer is a self-hosted web application that keeps track of your car maintena
 
 ## Quick Start
 
-### 1. Clone the repository
+### Option A: Docker (recommended)
 
 ```bash
-git clone https://github.com/your-username/care-of-your-car.git
-cd care-of-your-car
+git clone https://github.com/Greal-dev/car-carer.git
+cd car-carer
+cp .env.example .env
+# Edit .env with your API keys
+docker compose up -d
 ```
 
-### 2. Create a virtual environment and install dependencies
+Open **http://localhost:8200** — done.
+
+### Option B: Manual install
+
+#### 1. Clone the repository
+
+```bash
+git clone https://github.com/Greal-dev/car-carer.git
+cd car-carer
+```
+
+#### 2. Create a virtual environment and install dependencies
 
 ```bash
 python -m venv venv
@@ -47,7 +61,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Configure environment variables
+#### 3. Configure environment variables
 
 ```bash
 cp .env.example .env

@@ -40,7 +40,7 @@ Car Carer est une application web auto-hebergee de suivi d'entretien automobile.
 ### 1. Cloner le depot
 
 ```bash
-git clone https://github.com/votre-compte/care-of-your-car.git
+git clone https://github.com/Greal-dev/car-carer.git
 cd care-of-your-car
 ```
 

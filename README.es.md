@@ -40,7 +40,7 @@ Car Carer es una aplicacion web autoalojada para el seguimiento completo del man
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/tu-usuario/care-of-your-car.git
+git clone https://github.com/Greal-dev/car-carer.git
 cd care-of-your-car
 ```
 
