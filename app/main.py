@@ -23,10 +23,10 @@ app = FastAPI(title="Car Carer", version="0.1.0")
 
 # API routes
 app.include_router(auth.router)
+app.include_router(access.router)  # before vehicles (shared-with-me must match before /{vehicle_id})
 app.include_router(vehicles.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
-app.include_router(access.router)
 
 
 # ── Inline migrations ─────────────────────────────────────────────────
