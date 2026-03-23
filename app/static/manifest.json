@@ -1,6 +1,6 @@
 {
-  "name": "Care of your Car",
-  "short_name": "CarCare",
+  "name": "Car Carer",
+  "short_name": "CarCarer",
   "description": "Suivi d'entretien automobile intelligent",
   "start_url": "/",
   "display": "standalone",

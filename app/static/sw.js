@@ -1,4 +1,4 @@
-const CACHE_NAME = 'carcare-v1';
+const CACHE_NAME = 'carcarer-v1';
 const STATIC_ASSETS = [
     '/',
     '/static/css/style.css',

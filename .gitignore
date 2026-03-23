@@ -1,7 +1,45 @@
+# Environment & secrets
 .env
+*.env.local
+
+# Database
 *.db
+*.db-journal
+*.sqlite
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Uploads (user data)
 uploads/*
 !uploads/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code
 .claude/coordination/
+.claude/worktrees/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/

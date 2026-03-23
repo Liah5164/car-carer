@@ -19,7 +19,7 @@ from app.routers import auth, vehicles, documents, chat
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Care of your Car", version="0.1.0")
+app = FastAPI(title="Car Carer", version="0.1.0")
 
 # API routes
 app.include_router(auth.router)

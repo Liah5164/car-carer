@@ -1,4 +1,4 @@
-# Care of your Car — Specifications fonctionnelles et techniques
+# Car Carer — Specifications fonctionnelles et techniques
 
 **Version** : 0.1.0
 **Derniere mise a jour** : 2026-03-06
@@ -49,7 +49,7 @@ Application locale de suivi d'entretien automobile. Importe des factures, devis 
 | PDF | PyMuPDF (fitz) | 1.25.3 |
 | Image | Pillow | 11.1.0 |
 | Frontend | Alpine.js 3 + Tailwind CSS (CDN) | CDN, pas de build |
-| Runtime | Python 3.12.8 (embedded) | `/c/Users/aleau/python312-embed/python.exe` |
+| Runtime | Python 3.12+ | `python` or `python3` |
 
 ---
 
