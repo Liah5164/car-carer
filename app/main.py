@@ -61,6 +61,18 @@ def _run_migrations():
             except Exception:
                 logger.info("Migration skipped: vehicles.photo_path already exists")
 
+        # Add work_type to maintenance_events
+        if "maintenance_events" in insp.get_table_names():
+            me_cols = [c["name"] for c in insp.get_columns("maintenance_events")]
+            if "work_type" not in me_cols:
+                try:
+                    conn.execute(sqlalchemy.text(
+                        "ALTER TABLE maintenance_events ADD COLUMN work_type VARCHAR(20)"
+                    ))
+                    logger.info("Migration applied: maintenance_events.work_type added")
+                except Exception:
+                    pass  # column already exists
+
 
 _run_migrations()
 

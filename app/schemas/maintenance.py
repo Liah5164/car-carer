@@ -26,6 +26,7 @@ class MaintenanceEventOut(BaseModel):
     total_cost: Optional[float]
     notes: Optional[str]
     event_type: str
+    work_type: Optional[str] = None
     created_at: datetime
     items: list[MaintenanceItemOut] = []
 

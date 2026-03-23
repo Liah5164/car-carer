@@ -44,6 +44,9 @@ function app() {
         batchResults: [],
         batchEventSource: null,
 
+        // File preview state
+        selectedFiles: [],
+
         // Date clarification
         pendingDocs: [],
         showClarifyModal: false,
@@ -83,8 +86,36 @@ function app() {
         chatInput: '',
         chatLoading: false,
 
+        // Mobile menu
+        mobileMenuOpen: false,
+
+        // Toast notifications
+        toasts: [],
+        showToast(message, type = 'info', duration = 4000) {
+            const id = Date.now();
+            this.toasts.push({ id, message, type });
+            setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, duration);
+        },
+
+        // Confirm modal (replaces native confirm())
+        confirmPromise: null,
+        confirmMessage: '',
+        showConfirm(message) {
+            this.confirmMessage = message;
+            return new Promise(resolve => { this.confirmPromise = resolve; });
+        },
+        resolveConfirm(result) {
+            if (this.confirmPromise) { this.confirmPromise(result); this.confirmPromise = null; }
+            this.confirmMessage = '';
+        },
+
+        // i18n helper
+        t(key, params) { return I18N.t(key, params); },
+
         async init() {
             if (this.darkMode) document.documentElement.classList.add('dark');
+            await I18N.loadLocale('fr');
+            this.t = (key, params) => I18N.t(key, params);
             await this.checkAuth();
         },
 
@@ -127,10 +158,10 @@ function app() {
                     await this.loadVehicles();
                 } else {
                     const data = await res.json();
-                    this.authError = data.detail || 'Erreur de connexion';
+                    this.authError = data.detail || this.t('auth.login_error');
                 }
             } catch (e) {
-                this.authError = 'Erreur reseau';
+                this.authError = this.t('auth.network_error');
             }
             this.authLoading = false;
         },
@@ -152,10 +183,10 @@ function app() {
                     await this.loadVehicles();
                 } else {
                     const data = await res.json();
-                    this.authError = data.detail || 'Erreur';
+                    this.authError = data.detail || this.t('common.error');
                 }
             } catch (e) {
-                this.authError = 'Erreur reseau';
+                this.authError = this.t('auth.network_error');
             }
             this.authLoading = false;
         },
@@ -195,11 +226,12 @@ function app() {
                     this.showAddVehicle = false;
                     this.newVehicle = { name: '' };
                     await this.loadVehicles();
+                    this.showToast(this.t('toasts.vehicle_created'), 'success');
                 } else {
-                    alert('Erreur lors de la creation du vehicule');
+                    this.showToast(this.t('toasts.vehicle_create_error'), 'error');
                 }
             } catch (e) {
-                alert('Erreur reseau: ' + e.message);
+                this.showToast(this.t('toasts.network_error', { message: e.message }), 'error');
             }
         },
 
@@ -232,11 +264,12 @@ function app() {
                     await this.loadVehicles();
                     // Update selectedVehicle
                     this.selectedVehicle = this.vehicles.find(v => v.id === this.selectedVehicle.id) || this.selectedVehicle;
+                    this.showToast(this.t('toasts.vehicle_saved'), 'success');
                 } else {
-                    alert('Erreur lors de la sauvegarde');
+                    this.showToast(this.t('toasts.vehicle_save_error'), 'error');
                 }
             } catch (e) {
-                alert('Erreur reseau: ' + e.message);
+                this.showToast(this.t('toasts.network_error', { message: e.message }), 'error');
             }
         },
 
@@ -248,6 +281,7 @@ function app() {
             this.batchResults = [];
             this.analysis = null;
             this.stats = null;
+            this.selectedFiles = [];
             this.loadVehiclePhoto();
             await Promise.all([
                 this.loadMaintenance(v.id),
@@ -289,28 +323,43 @@ function app() {
 
         // --- Delete maintenance/CT ---
         async deleteMaintenanceEvent(eventId) {
-            if (!confirm('Supprimer cet entretien ?')) return;
+            const confirmed = await this.showConfirm(this.t('confirm.delete_maintenance'));
+            if (!confirmed) return;
             try {
                 const res = await safeFetch(`/api/vehicles/${this.selectedVehicle.id}/maintenance/${eventId}`, { method: 'DELETE' });
-                if (res.ok) await this._refreshAll();
-                else alert('Erreur lors de la suppression');
-            } catch (e) { alert('Erreur reseau: ' + e.message); }
+                if (res.ok) {
+                    this.showToast(this.t('toasts.deleted'), 'success');
+                    await this._refreshAll();
+                }
+                else this.showToast(this.t('toasts.delete_error'), 'error');
+            } catch (e) { this.showToast(this.t('toasts.network_error', { message: e.message }), 'error'); }
         },
 
         async deleteCTReport(ctId) {
-            if (!confirm('Supprimer ce controle technique ?')) return;
+            const confirmed = await this.showConfirm(this.t('confirm.delete_ct'));
+            if (!confirmed) return;
             try {
                 const res = await safeFetch(`/api/vehicles/${this.selectedVehicle.id}/ct/${ctId}`, { method: 'DELETE' });
-                if (res.ok) await this._refreshAll();
-                else alert('Erreur lors de la suppression');
-            } catch (e) { alert('Erreur reseau: ' + e.message); }
+                if (res.ok) {
+                    this.showToast(this.t('toasts.deleted'), 'success');
+                    await this._refreshAll();
+                }
+                else this.showToast(this.t('toasts.delete_error'), 'error');
+            } catch (e) { this.showToast(this.t('toasts.network_error', { message: e.message }), 'error'); }
         },
 
         // --- Upload ---
+        formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' o';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+        },
+
         async uploadFile(file) {
             if (!this.selectedVehicle) return;
             this.uploading = true;
             this.uploadResult = null;
+            this.selectedFiles = [];
             const form = new FormData();
             form.append('vehicle_id', this.selectedVehicle.id);
             form.append('doc_type', this.uploadDocType);
@@ -330,6 +379,9 @@ function app() {
         handleFileSelect(event) {
             const files = Array.from(event.target.files);
             if (files.length === 0) return;
+            // Show preview
+            this.selectedFiles = files.map(f => ({ name: f.name, size: this.formatFileSize(f.size), file: f }));
+            // Auto-upload
             if (files.length === 1) this.uploadFile(files[0]);
             else this.batchUpload(files);
             event.target.value = '';
@@ -339,6 +391,8 @@ function app() {
             this.dragOver = false;
             const files = Array.from(event.dataTransfer.files);
             if (files.length === 0) return;
+            // Show preview
+            this.selectedFiles = files.map(f => ({ name: f.name, size: this.formatFileSize(f.size), file: f }));
             if (files.length === 1) this.uploadFile(files[0]);
             else this.batchUpload(files);
         },
@@ -371,6 +425,7 @@ function app() {
                         evtSource.close();
                         this.batchEventSource = null;
                         this.uploading = false;
+                        this.selectedFiles = [];
                         await this._refreshAll();
                     }
                 };
@@ -531,10 +586,10 @@ function app() {
                     a.click();
                     URL.revokeObjectURL(url);
                 } else {
-                    alert('Erreur lors de l\'export PDF');
+                    this.showToast(this.t('toasts.export_pdf_error'), 'error');
                 }
             } catch (e) {
-                alert('Erreur: ' + e.message);
+                this.showToast(this.t('toasts.network_error', { message: e.message }), 'error');
             }
         },
 
@@ -558,10 +613,10 @@ function app() {
                 if (res.ok) {
                     this.vehiclePhotoUrl = `/api/vehicles/${this.selectedVehicle.id}/photo?t=${Date.now()}`;
                 } else {
-                    alert('Erreur lors de l\'upload de la photo');
+                    this.showToast(this.t('toasts.photo_upload_error'), 'error');
                 }
             } catch (e) {
-                alert('Erreur: ' + e.message);
+                this.showToast(this.t('toasts.network_error', { message: e.message }), 'error');
             }
         },
 
@@ -642,10 +697,10 @@ function app() {
                     a.click();
                     URL.revokeObjectURL(url);
                 } else {
-                    alert('Erreur lors de l\'export CSV');
+                    this.showToast(this.t('toasts.export_csv_error'), 'error');
                 }
             } catch (e) {
-                alert('Erreur: ' + e.message);
+                this.showToast(this.t('toasts.network_error', { message: e.message }), 'error');
             }
         },
 
@@ -657,6 +712,10 @@ function app() {
                 const res = await safeFetch(url);
                 if (res.ok) this.conversations = await res.json();
             } catch (e) { console.error('Erreur chargement conversations:', e.message); }
+            // Auto-select vehicle if only one exists
+            if (!this.chatVehicleId && this.vehicles.length === 1) {
+                this.chatVehicleId = this.vehicles[0].id;
+            }
         },
 
         newConversation() {
@@ -674,12 +733,40 @@ function app() {
             this.$nextTick(() => this.scrollChat());
         },
 
+        async deleteConversation(c, event) {
+            event.stopPropagation();
+            const confirmed = await this.showConfirm(this.t('confirm.delete_conversation'));
+            if (!confirmed) return;
+            try {
+                const res = await safeFetch(`/api/chat/conversations/${c.id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    if (this.currentConversation?.id === c.id) {
+                        this.currentConversation = null;
+                        this.chatMessages = [];
+                    }
+                    await this.loadConversations();
+                    this.showToast(this.t('toasts.conversation_deleted'), 'success');
+                } else {
+                    this.showToast(this.t('toasts.delete_error'), 'error');
+                }
+            } catch (e) {
+                this.showToast(this.t('toasts.network_error', { message: e.message }), 'error');
+            }
+        },
+
+        conversationPreview(c) {
+            if (c.last_message) {
+                return c.last_message.length > 60 ? c.last_message.substring(0, 60) + '...' : c.last_message;
+            }
+            return '';
+        },
+
         async sendMessage() {
             const text = this.chatInput.trim();
             if (!text) return;
             if (!this.chatVehicleId && !this.currentConversation) {
                 if (this.vehicles.length > 0) this.chatVehicleId = this.vehicles[0].id;
-                else { alert('Ajoutez d\'abord un vehicule.'); return; }
+                else { this.showToast(this.t('chat.add_vehicle_first'), 'warning'); return; }
             }
             this.chatInput = '';
             this.chatLoading = true;

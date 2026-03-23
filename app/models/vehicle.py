@@ -31,3 +31,8 @@ class Vehicle(Base):
     maintenance_events = relationship("MaintenanceEvent", back_populates="vehicle", cascade="all, delete-orphan")
     ct_reports = relationship("CTReport", back_populates="vehicle", cascade="all, delete-orphan")
     conversations = relationship("Conversation", back_populates="vehicle", cascade="all, delete-orphan")
+    fuel_records = relationship("FuelRecord", back_populates="vehicle", cascade="all, delete-orphan")
+    reminders = relationship("MaintenanceReminder", back_populates="vehicle", cascade="all, delete-orphan")
+    tax_insurance_records = relationship("TaxInsuranceRecord", back_populates="vehicle", cascade="all, delete-orphan")
+    notes = relationship("VehicleNote", back_populates="vehicle", cascade="all, delete-orphan")
+    access_list = relationship("VehicleAccess", back_populates="vehicle", cascade="all, delete-orphan")

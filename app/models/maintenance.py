@@ -20,6 +20,7 @@ class MaintenanceEvent(Base):
     total_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     event_type: Mapped[str] = mapped_column(String(20), default="invoice")  # invoice, quote
+    work_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "service", "repair", "upgrade"
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     vehicle = relationship("Vehicle", back_populates="maintenance_events")
