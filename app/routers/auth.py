@@ -131,3 +131,24 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if not user:
         raise HTTPException(401, "Non authentifie")
     return user
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change the current user's password."""
+    if not verify_password(body.current_password, user.hashed_password):
+        raise HTTPException(400, "Mot de passe actuel incorrect")
+    if len(body.new_password) < 6:
+        raise HTTPException(400, "Nouveau mot de passe trop court (min 6 caracteres)")
+    user.hashed_password = hash_password(body.new_password)
+    db.commit()
+    return {"ok": True}

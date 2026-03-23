@@ -12,8 +12,13 @@ from sqlalchemy.orm import Session, joinedload
 from app.config import UPLOAD_PATH, settings
 from app.database import get_db
 from app.models import Vehicle, MaintenanceEvent, MaintenanceItem, CTReport, CTDefect, Document
+from app.models import FuelRecord, MaintenanceReminder, TaxInsuranceRecord, VehicleNote, VehicleAccess
 from app.models.user import User
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate, VehicleOut, VehicleSummary
+from app.schemas.fuel import FuelRecordCreate, FuelRecordOut
+from app.schemas.reminder import ReminderCreate, ReminderUpdate, ReminderOut
+from app.schemas.tax_insurance import TaxInsuranceCreate, TaxInsuranceUpdate, TaxInsuranceOut
+from app.schemas.vehicle_note import VehicleNoteCreate, VehicleNoteUpdate, VehicleNoteOut
 from app.services.analysis import analyze_vehicle
 from app.routers.auth import get_current_user
 
@@ -79,10 +84,33 @@ def get_dashboard(user: User = Depends(get_current_user), db: Session = Depends(
     }
 
 
-def _get_vehicle_or_404(vehicle_id: int, user: User, db: Session) -> Vehicle:
+def _get_vehicle_or_404(vehicle_id: int, user: User, db: Session, require_role: str | None = None) -> Vehicle:
+    """Get vehicle, checking ownership or shared access.
+
+    require_role: None = read access (any role), "editor" = editor or owner, "owner" = owner only.
+    """
     vehicle = db.get(Vehicle, vehicle_id)
-    if not vehicle or (vehicle.user_id and vehicle.user_id != user.id):
+    if not vehicle:
         raise HTTPException(404, "Vehicule non trouve")
+
+    # Direct owner (legacy or via user_id)
+    if vehicle.user_id is None or vehicle.user_id == user.id:
+        return vehicle
+
+    # Check shared access via VehicleAccess
+    access = db.query(VehicleAccess).filter(
+        VehicleAccess.vehicle_id == vehicle_id,
+        VehicleAccess.user_id == user.id,
+    ).first()
+    if not access:
+        raise HTTPException(404, "Vehicule non trouve")
+
+    # Role hierarchy: owner > editor > viewer
+    if require_role == "owner" and access.role != "owner":
+        raise HTTPException(403, "Acces insuffisant")
+    if require_role == "editor" and access.role not in ("owner", "editor"):
+        raise HTTPException(403, "Acces insuffisant")
+
     return vehicle
 
 
@@ -620,3 +648,321 @@ def get_reminders(vehicle_id: int, user: User = Depends(get_current_user), db: S
             "total": len(reminders),
         },
     }
+
+
+# --- Fuel records ---
+
+@router.post("/{vehicle_id}/fuel", response_model=FuelRecordOut, status_code=201)
+def create_fuel_record(
+    vehicle_id: int,
+    data: FuelRecordCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    # Auto-calculate price_per_liter if not provided
+    price_per_liter = data.price_per_liter
+    if price_per_liter is None and data.liters > 0:
+        price_per_liter = round(data.price_total / data.liters, 3)
+    record = FuelRecord(
+        vehicle_id=vehicle_id,
+        price_per_liter=price_per_liter,
+        **data.model_dump(exclude={"price_per_liter"}),
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@router.get("/{vehicle_id}/fuel", response_model=list[FuelRecordOut])
+def list_fuel_records(
+    vehicle_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db)
+    return (
+        db.query(FuelRecord)
+        .filter(FuelRecord.vehicle_id == vehicle_id)
+        .order_by(FuelRecord.date.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+@router.delete("/{vehicle_id}/fuel/{fuel_id}", status_code=204)
+def delete_fuel_record(
+    vehicle_id: int,
+    fuel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    record = db.get(FuelRecord, fuel_id)
+    if not record or record.vehicle_id != vehicle_id:
+        raise HTTPException(404, "Enregistrement carburant non trouve")
+    db.delete(record)
+    db.commit()
+
+
+@router.get("/{vehicle_id}/fuel/stats")
+def get_fuel_stats(
+    vehicle_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Consumption stats calculated from fuel records with full-tank fills."""
+    _get_vehicle_or_404(vehicle_id, user, db)
+    records = (
+        db.query(FuelRecord)
+        .filter(FuelRecord.vehicle_id == vehicle_id)
+        .order_by(FuelRecord.date.asc())
+        .all()
+    )
+    if not records:
+        return {"total_liters": 0, "total_cost": 0, "record_count": 0, "consumptions": []}
+
+    total_liters = sum(r.liters for r in records)
+    total_cost = sum(r.price_total for r in records)
+    avg_price_per_liter = round(total_cost / total_liters, 3) if total_liters > 0 else None
+
+    # Calculate consumption between consecutive full-tank fills
+    consumptions = []
+    prev_full = None
+    for r in records:
+        if r.is_full_tank and r.mileage is not None:
+            if prev_full is not None and prev_full.mileage is not None:
+                km_diff = r.mileage - prev_full.mileage
+                if km_diff > 0:
+                    # Sum liters between prev_full and r (exclusive of prev_full, inclusive of r)
+                    liters_between = sum(
+                        fr.liters for fr in records
+                        if fr.date > prev_full.date and fr.date <= r.date
+                    )
+                    consumption = round(liters_between / km_diff * 100, 2)
+                    consumptions.append({
+                        "date": str(r.date),
+                        "km": r.mileage,
+                        "liters_100km": consumption,
+                        "km_driven": km_diff,
+                    })
+            prev_full = r
+
+    avg_consumption = None
+    if consumptions:
+        avg_consumption = round(sum(c["liters_100km"] for c in consumptions) / len(consumptions), 2)
+
+    return {
+        "total_liters": round(total_liters, 2),
+        "total_cost": round(total_cost, 2),
+        "avg_price_per_liter": avg_price_per_liter,
+        "avg_consumption_l100km": avg_consumption,
+        "record_count": len(records),
+        "consumptions": consumptions,
+    }
+
+
+# --- Custom reminders ---
+
+@router.post("/{vehicle_id}/reminders-custom", response_model=ReminderOut, status_code=201)
+def create_custom_reminder(
+    vehicle_id: int,
+    data: ReminderCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    reminder = MaintenanceReminder(vehicle_id=vehicle_id, **data.model_dump())
+    db.add(reminder)
+    db.commit()
+    db.refresh(reminder)
+    return reminder
+
+
+@router.get("/{vehicle_id}/reminders-custom", response_model=list[ReminderOut])
+def list_custom_reminders(
+    vehicle_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db)
+    return (
+        db.query(MaintenanceReminder)
+        .filter(MaintenanceReminder.vehicle_id == vehicle_id)
+        .order_by(MaintenanceReminder.created_at.desc())
+        .all()
+    )
+
+
+@router.patch("/{vehicle_id}/reminders-custom/{reminder_id}", response_model=ReminderOut)
+def update_custom_reminder(
+    vehicle_id: int,
+    reminder_id: int,
+    data: ReminderUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    reminder = db.get(MaintenanceReminder, reminder_id)
+    if not reminder or reminder.vehicle_id != vehicle_id:
+        raise HTTPException(404, "Rappel non trouve")
+    for key, val in data.model_dump(exclude_unset=True).items():
+        setattr(reminder, key, val)
+    db.commit()
+    db.refresh(reminder)
+    return reminder
+
+
+@router.delete("/{vehicle_id}/reminders-custom/{reminder_id}", status_code=204)
+def delete_custom_reminder(
+    vehicle_id: int,
+    reminder_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    reminder = db.get(MaintenanceReminder, reminder_id)
+    if not reminder or reminder.vehicle_id != vehicle_id:
+        raise HTTPException(404, "Rappel non trouve")
+    db.delete(reminder)
+    db.commit()
+
+
+# --- Tax & Insurance ---
+
+@router.post("/{vehicle_id}/tax-insurance", response_model=TaxInsuranceOut, status_code=201)
+def create_tax_insurance(
+    vehicle_id: int,
+    data: TaxInsuranceCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    record = TaxInsuranceRecord(vehicle_id=vehicle_id, **data.model_dump())
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@router.get("/{vehicle_id}/tax-insurance", response_model=list[TaxInsuranceOut])
+def list_tax_insurance(
+    vehicle_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db)
+    return (
+        db.query(TaxInsuranceRecord)
+        .filter(TaxInsuranceRecord.vehicle_id == vehicle_id)
+        .order_by(TaxInsuranceRecord.date.desc())
+        .all()
+    )
+
+
+@router.patch("/{vehicle_id}/tax-insurance/{record_id}", response_model=TaxInsuranceOut)
+def update_tax_insurance(
+    vehicle_id: int,
+    record_id: int,
+    data: TaxInsuranceUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    record = db.get(TaxInsuranceRecord, record_id)
+    if not record or record.vehicle_id != vehicle_id:
+        raise HTTPException(404, "Enregistrement taxe/assurance non trouve")
+    for key, val in data.model_dump(exclude_unset=True).items():
+        setattr(record, key, val)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@router.delete("/{vehicle_id}/tax-insurance/{record_id}", status_code=204)
+def delete_tax_insurance(
+    vehicle_id: int,
+    record_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    record = db.get(TaxInsuranceRecord, record_id)
+    if not record or record.vehicle_id != vehicle_id:
+        raise HTTPException(404, "Enregistrement taxe/assurance non trouve")
+    db.delete(record)
+    db.commit()
+
+
+# --- Vehicle notes ---
+
+@router.post("/{vehicle_id}/notes", response_model=VehicleNoteOut, status_code=201)
+def create_vehicle_note(
+    vehicle_id: int,
+    data: VehicleNoteCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    note = VehicleNote(vehicle_id=vehicle_id, **data.model_dump())
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return note
+
+
+@router.get("/{vehicle_id}/notes", response_model=list[VehicleNoteOut])
+def list_vehicle_notes(
+    vehicle_id: int,
+    q: Optional[str] = Query(None, description="Recherche dans le contenu"),
+    pinned_first: bool = Query(True, description="Trier les epingles en premier"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db)
+    query = db.query(VehicleNote).filter(VehicleNote.vehicle_id == vehicle_id)
+    if q:
+        query = query.filter(VehicleNote.content.ilike(f"%{q}%"))
+    if pinned_first:
+        query = query.order_by(VehicleNote.pinned.desc(), VehicleNote.created_at.desc())
+    else:
+        query = query.order_by(VehicleNote.created_at.desc())
+    return query.all()
+
+
+@router.patch("/{vehicle_id}/notes/{note_id}", response_model=VehicleNoteOut)
+def update_vehicle_note(
+    vehicle_id: int,
+    note_id: int,
+    data: VehicleNoteUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    note = db.get(VehicleNote, note_id)
+    if not note or note.vehicle_id != vehicle_id:
+        raise HTTPException(404, "Note non trouvee")
+    for key, val in data.model_dump(exclude_unset=True).items():
+        setattr(note, key, val)
+    db.commit()
+    db.refresh(note)
+    return note
+
+
+@router.delete("/{vehicle_id}/notes/{note_id}", status_code=204)
+def delete_vehicle_note(
+    vehicle_id: int,
+    note_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_vehicle_or_404(vehicle_id, user, db, require_role="editor")
+    note = db.get(VehicleNote, note_id)
+    if not note or note.vehicle_id != vehicle_id:
+        raise HTTPException(404, "Note non trouvee")
+    db.delete(note)
+    db.commit()

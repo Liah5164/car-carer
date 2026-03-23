@@ -1,7 +1,7 @@
 """Agent tools for querying the vehicle maintenance database."""
 
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import func, or_
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import (
     Vehicle, MaintenanceEvent, MaintenanceItem,
     CTReport, CTDefect, Document,
+    FuelRecord, VehicleNote, TaxInsuranceRecord, MaintenanceReminder,
 )
 from app.services.analysis import analyze_vehicle
 
@@ -102,6 +103,76 @@ TOOL_DEFINITIONS = [
             "required": ["vehicle_id"],
         },
     },
+    {
+        "name": "get_fuel_stats",
+        "description": "Obtenir les statistiques de consommation de carburant du vehicule: consommation moyenne L/100km, cout total, historique.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "vehicle_id": {"type": "integer", "description": "ID du vehicule"},
+            },
+            "required": ["vehicle_id"],
+        },
+    },
+    {
+        "name": "get_fuel_history",
+        "description": "Obtenir l'historique detaille des pleins de carburant du vehicule.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "vehicle_id": {"type": "integer", "description": "ID du vehicule"},
+                "limit": {"type": "integer", "description": "Nombre max de resultats (defaut: 20)"},
+            },
+            "required": ["vehicle_id"],
+        },
+    },
+    {
+        "name": "get_vehicle_notes",
+        "description": "Obtenir les notes libres du vehicule. Utile pour voir les observations manuelles de l'utilisateur.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "vehicle_id": {"type": "integer", "description": "ID du vehicule"},
+                "search": {"type": "string", "description": "Mot-cle optionnel pour filtrer les notes"},
+            },
+            "required": ["vehicle_id"],
+        },
+    },
+    {
+        "name": "add_vehicle_note",
+        "description": "Ajouter une note libre au vehicule. L'utilisateur peut demander a l'assistant d'ajouter une note.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "vehicle_id": {"type": "integer", "description": "ID du vehicule"},
+                "content": {"type": "string", "description": "Contenu de la note"},
+            },
+            "required": ["vehicle_id", "content"],
+        },
+    },
+    {
+        "name": "get_tax_insurance_status",
+        "description": "Obtenir le statut des taxes et assurances du vehicule: liste, dates d'echeance, montants.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "vehicle_id": {"type": "integer", "description": "ID du vehicule"},
+            },
+            "required": ["vehicle_id"],
+        },
+    },
+    {
+        "name": "get_upcoming_renewals",
+        "description": "Obtenir les prochaines echeances (assurance, vignette, CT, rappels entretien) dans les N prochains jours.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "vehicle_id": {"type": "integer", "description": "ID du vehicule"},
+                "days_ahead": {"type": "integer", "description": "Nombre de jours a regarder en avant (defaut: 90)"},
+            },
+            "required": ["vehicle_id"],
+        },
+    },
 ]
 
 
@@ -130,6 +201,12 @@ def execute_tool(tool_name: str, tool_input: dict, db: Session, allowed_vehicle_
         "get_mileage_timeline": _get_mileage_timeline,
         "get_spending_summary": _get_spending_summary,
         "get_vehicle_analysis": _get_vehicle_analysis,
+        "get_fuel_stats": _get_fuel_stats,
+        "get_fuel_history": _get_fuel_history,
+        "get_vehicle_notes": _get_vehicle_notes,
+        "add_vehicle_note": _add_vehicle_note,
+        "get_tax_insurance_status": _get_tax_insurance_status,
+        "get_upcoming_renewals": _get_upcoming_renewals,
     }
     handler = handlers.get(tool_name)
     if not handler:
@@ -475,5 +552,240 @@ def _get_vehicle_analysis(db: Session, vehicle_id: int) -> str:
     ok_count = sum(1 for a in intervals if a["level"] == "ok")
     warn_count = sum(1 for a in intervals if a["level"] == "warning")
     lines.append(f"Intervalles d'entretien: {ok_count} a jour, {warn_count} en retard")
+
+    return "\n".join(lines)
+
+
+def _get_fuel_stats(db: Session, vehicle_id: int) -> str:
+    records = (
+        db.query(FuelRecord)
+        .filter(FuelRecord.vehicle_id == vehicle_id)
+        .order_by(FuelRecord.mileage.asc())
+        .all()
+    )
+    if not records:
+        return "Aucun plein de carburant enregistre pour ce vehicule."
+
+    total_cost = sum(r.price_total for r in records)
+    total_liters = sum(r.liters for r in records)
+
+    # Calculate consumption between consecutive full tanks
+    consumptions = []
+    full_records = [r for r in records if r.is_full_tank and r.mileage is not None]
+    for i in range(1, len(full_records)):
+        prev = full_records[i - 1]
+        curr = full_records[i]
+        km_diff = curr.mileage - prev.mileage
+        if km_diff > 0:
+            consumption = (curr.liters / km_diff) * 100
+            consumptions.append(consumption)
+
+    lines = [
+        f"=== STATISTIQUES CARBURANT ===",
+        f"Nombre de pleins: {len(records)}",
+        f"Total depense: {total_cost:.2f} EUR",
+        f"Total litres: {total_liters:.1f} L",
+    ]
+
+    if consumptions:
+        avg_consumption = sum(consumptions) / len(consumptions)
+        min_consumption = min(consumptions)
+        max_consumption = max(consumptions)
+        lines.append(f"Consommation moyenne: {avg_consumption:.1f} L/100km")
+        lines.append(f"Consommation min: {min_consumption:.1f} L/100km | max: {max_consumption:.1f} L/100km")
+        lines.append(f"(calculee sur {len(consumptions)} intervalle(s) entre pleins complets)")
+    else:
+        lines.append("Consommation moyenne: impossible a calculer (pas assez de pleins complets avec km)")
+
+    if records[-1].mileage and records[0].mileage:
+        total_km = records[-1].mileage - records[0].mileage
+        if total_km > 0:
+            cost_per_km = total_cost / total_km
+            lines.append(f"Cout moyen: {cost_per_km:.3f} EUR/km ({cost_per_km * 100:.1f} EUR/100km)")
+
+    return "\n".join(lines)
+
+
+def _get_fuel_history(db: Session, vehicle_id: int, limit: int = 20) -> str:
+    records = (
+        db.query(FuelRecord)
+        .filter(FuelRecord.vehicle_id == vehicle_id)
+        .order_by(FuelRecord.date.desc())
+        .limit(limit)
+        .all()
+    )
+    if not records:
+        return "Aucun plein de carburant enregistre."
+
+    lines = [f"Derniers {len(records)} plein(s) :"]
+    for r in records:
+        price_per_l = f"{r.price_per_liter:.3f} EUR/L" if r.price_per_liter else "?"
+        full = "plein complet" if r.is_full_tank else "plein partiel"
+        lines.append(
+            f"  {r.date} | {r.liters:.1f} L | {r.price_total:.2f} EUR ({price_per_l}) | "
+            f"{r.mileage or '?'} km | {r.station_name or '?'} | {full}"
+        )
+
+    return "\n".join(lines)
+
+
+def _get_vehicle_notes(db: Session, vehicle_id: int, search: Optional[str] = None) -> str:
+    query = db.query(VehicleNote).filter(VehicleNote.vehicle_id == vehicle_id)
+
+    if search:
+        query = query.filter(VehicleNote.content.ilike(f"%{search}%"))
+
+    notes = query.order_by(VehicleNote.pinned.desc(), VehicleNote.created_at.desc()).all()
+
+    if not notes:
+        if search:
+            return f"Aucune note trouvee contenant '{search}'."
+        return "Aucune note enregistree pour ce vehicule."
+
+    lines = [f"{len(notes)} note(s) :"]
+    for n in notes:
+        pin = "[EPINGLEE] " if n.pinned else ""
+        content_preview = n.content[:200] + "..." if len(n.content) > 200 else n.content
+        lines.append(f"  #{n.id} — {n.created_at.strftime('%Y-%m-%d %H:%M')} — {pin}{content_preview}")
+
+    return "\n".join(lines)
+
+
+def _add_vehicle_note(db: Session, vehicle_id: int, content: str) -> str:
+    v = db.get(Vehicle, vehicle_id)
+    if not v:
+        return "Vehicule non trouve."
+
+    note = VehicleNote(vehicle_id=vehicle_id, content=content)
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+
+    return f"Note #{note.id} ajoutee avec succes au vehicule {v.name}."
+
+
+def _get_tax_insurance_status(db: Session, vehicle_id: int) -> str:
+    records = (
+        db.query(TaxInsuranceRecord)
+        .filter(TaxInsuranceRecord.vehicle_id == vehicle_id)
+        .all()
+    )
+    if not records:
+        return "Aucune taxe ou assurance enregistree pour ce vehicule."
+
+    today = date.today()
+    items = []
+    for r in records:
+        days_left = None
+        status = "N/A"
+        if r.next_renewal_date:
+            days_left = (r.next_renewal_date - today).days
+            if days_left < 0:
+                status = f"EXPIRE depuis {abs(days_left)} jour(s)"
+            elif days_left == 0:
+                status = "EXPIRE AUJOURD'HUI"
+            elif days_left <= 30:
+                status = f"URGENT — {days_left} jour(s) restant(s)"
+            else:
+                status = f"{days_left} jour(s) restant(s)"
+        items.append((days_left if days_left is not None else 999999, r, status))
+
+    # Sort by urgency (most urgent first)
+    items.sort(key=lambda x: x[0])
+
+    lines = [f"{len(records)} taxe(s)/assurance(s) :"]
+    for _, r, status in items:
+        freq = f" ({r.renewal_frequency})" if r.renewal_frequency else ""
+        provider = f" — {r.provider}" if r.provider else ""
+        renewal = f" | Echeance: {r.next_renewal_date} ({status})" if r.next_renewal_date else ""
+        lines.append(
+            f"  [{r.record_type.upper()}] {r.name}{provider} | {r.cost:.2f} EUR{freq}{renewal}"
+        )
+
+    return "\n".join(lines)
+
+
+def _get_upcoming_renewals(db: Session, vehicle_id: int, days_ahead: int = 90) -> str:
+    today = date.today()
+    horizon = today + timedelta(days=days_ahead)
+
+    deadlines = []
+
+    # Tax/insurance renewals
+    tax_records = (
+        db.query(TaxInsuranceRecord)
+        .filter(
+            TaxInsuranceRecord.vehicle_id == vehicle_id,
+            TaxInsuranceRecord.next_renewal_date.isnot(None),
+            TaxInsuranceRecord.next_renewal_date <= horizon,
+        )
+        .all()
+    )
+    for r in tax_records:
+        days_left = (r.next_renewal_date - today).days
+        deadlines.append((r.next_renewal_date, days_left, f"[{r.record_type.upper()}] {r.name}", r.cost))
+
+    # CT reports — next due date
+    ct_reports = (
+        db.query(CTReport)
+        .filter(
+            CTReport.vehicle_id == vehicle_id,
+            CTReport.next_due_date.isnot(None),
+            CTReport.next_due_date <= horizon,
+        )
+        .all()
+    )
+    for ct in ct_reports:
+        days_left = (ct.next_due_date - today).days
+        deadlines.append((ct.next_due_date, days_left, f"[CT] Controle technique", None))
+
+    # Active maintenance reminders (date-based ones)
+    reminders = (
+        db.query(MaintenanceReminder)
+        .filter(
+            MaintenanceReminder.vehicle_id == vehicle_id,
+            MaintenanceReminder.active == True,
+            MaintenanceReminder.trigger_mode.in_(["date_only", "km_or_date"]),
+            MaintenanceReminder.last_performed_date.isnot(None),
+            MaintenanceReminder.months_interval.isnot(None),
+        )
+        .all()
+    )
+    for rem in reminders:
+        # Calculate next due date from last_performed_date + months_interval
+        next_month = rem.last_performed_date.month + rem.months_interval
+        next_year = rem.last_performed_date.year + (next_month - 1) // 12
+        next_month = ((next_month - 1) % 12) + 1
+        try:
+            next_due = rem.last_performed_date.replace(year=next_year, month=next_month)
+        except ValueError:
+            # Handle month-end edge case (e.g., Jan 31 + 1 month)
+            import calendar
+            last_day = calendar.monthrange(next_year, next_month)[1]
+            next_due = rem.last_performed_date.replace(year=next_year, month=next_month, day=min(rem.last_performed_date.day, last_day))
+
+        if next_due <= horizon:
+            days_left = (next_due - today).days
+            deadlines.append((next_due, days_left, f"[RAPPEL] {rem.title}", None))
+
+    if not deadlines:
+        return f"Aucune echeance dans les {days_ahead} prochains jours."
+
+    deadlines.sort(key=lambda x: x[0])
+
+    lines = [f"Echeances dans les {days_ahead} prochains jours ({len(deadlines)}) :"]
+    for due_date, days_left, label, cost in deadlines:
+        cost_str = f" | {cost:.2f} EUR" if cost else ""
+        if days_left < 0:
+            urgency = f"EXPIRE depuis {abs(days_left)}j"
+        elif days_left == 0:
+            urgency = "AUJOURD'HUI"
+        elif days_left <= 7:
+            urgency = f"dans {days_left}j !!!"
+        elif days_left <= 30:
+            urgency = f"dans {days_left}j"
+        else:
+            urgency = f"dans {days_left}j"
+        lines.append(f"  {due_date} — {label}{cost_str} — {urgency}")
 
     return "\n".join(lines)

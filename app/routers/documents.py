@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import UPLOAD_PATH, settings
 from app.database import get_db, SessionLocal
 from app.models import Document, Vehicle, MaintenanceEvent, MaintenanceItem, CTReport, CTDefect
+from app.models import FuelRecord, TaxInsuranceRecord
 from app.models.user import User
 from app.schemas.document import DocumentOut, ExtractionResult, DateConfirmation
 from app.schemas.maintenance import MaintenanceEventOut
@@ -319,6 +320,28 @@ async def _process_single_file(db: Session, vehicle: Vehicle, file_info: dict, d
             "doc_type": "ct_report",
             "message": f"CT: {data.get('result', '?')}, {len(data.get('defects', []))} defaut(s)",
         }
+    elif actual_type == "fuel":
+        doc.doc_type = "fuel"
+        doc.extracted = True
+        _create_fuel_record(db, vehicle.id, doc.id, data)
+        db.commit()
+        return {
+            "filename": file_info["original_filename"],
+            "success": True,
+            "doc_type": "fuel",
+            "message": f"Carburant: {data.get('liters', '?')}L a {data.get('price_total', '?')} EUR",
+        }
+    elif actual_type == "tax_insurance":
+        doc.doc_type = "tax_insurance"
+        doc.extracted = True
+        _create_tax_insurance_record(db, vehicle.id, doc.id, data)
+        db.commit()
+        return {
+            "filename": file_info["original_filename"],
+            "success": True,
+            "doc_type": "tax_insurance",
+            "message": f"Taxe/assurance: {data.get('name', '?')} — {data.get('cost', '?')} EUR",
+        }
     else:
         doc.extracted = True
         db.commit()
@@ -408,6 +431,10 @@ def _detect_actual_type(data: dict, doc_type_hint: str) -> str:
     actual = data.get("doc_type", doc_type_hint)
     if actual in ("invoice", "quote"):
         return actual
+    if actual == "fuel" or doc_type_hint == "fuel":
+        return "fuel"
+    if actual == "tax_insurance" or doc_type_hint == "tax_insurance":
+        return "tax_insurance"
     if "defects" in data or actual == "ct_report":
         return "ct_report"
     return "unknown"
@@ -497,6 +524,28 @@ def _finalize_document(db: Session, doc: Document, vehicle: Vehicle, data: dict,
             message=f"CT extrait: {data.get('result', '?')}, {len(data.get('defects', []))} defaut(s)",
             data=data,
         )
+    elif actual_type == "fuel":
+        doc.doc_type = "fuel"
+        doc.extracted = True
+        _create_fuel_record(db, vehicle.id, doc.id, data)
+        db.commit()
+        return ExtractionResult(
+            success=True,
+            doc_type="fuel",
+            message=f"Carburant extrait: {data.get('liters', '?')}L a {data.get('price_total', '?')} EUR",
+            data=data,
+        )
+    elif actual_type == "tax_insurance":
+        doc.doc_type = "tax_insurance"
+        doc.extracted = True
+        _create_tax_insurance_record(db, vehicle.id, doc.id, data)
+        db.commit()
+        return ExtractionResult(
+            success=True,
+            doc_type="tax_insurance",
+            message=f"Taxe/assurance extrait: {data.get('name', '?')} — {data.get('cost', '?')} EUR",
+            data=data,
+        )
     else:
         doc.extracted = True
         db.commit()
@@ -535,6 +584,7 @@ def _create_maintenance_event(db: Session, vehicle_id: int, doc_id: int, data: d
         total_cost=data.get("total_cost"),
         notes=data.get("notes"),
         event_type=data.get("doc_type", "invoice"),
+        work_type=data.get("work_type"),
     )
     db.add(event)
     db.flush()
@@ -580,6 +630,58 @@ def _create_ct_report(db: Session, vehicle_id: int, doc_id: int, data: dict) -> 
         )
         db.add(defect)
     return ct
+
+
+def _create_fuel_record(db: Session, vehicle_id: int, doc_id: int, data: dict) -> FuelRecord:
+    """Create a FuelRecord from extracted document data."""
+    fuel_date = date.fromisoformat(data["date"]) if data.get("date") else date.today()
+    liters = data.get("liters", 0)
+    price_total = data.get("price_total", 0)
+    price_per_liter = data.get("price_per_liter")
+    if price_per_liter is None and liters > 0:
+        price_per_liter = round(price_total / liters, 3)
+    record = FuelRecord(
+        vehicle_id=vehicle_id,
+        document_id=doc_id,
+        date=fuel_date,
+        mileage=data.get("mileage"),
+        liters=liters,
+        price_total=price_total,
+        price_per_liter=price_per_liter,
+        station_name=data.get("station_name"),
+        fuel_type=data.get("fuel_type"),
+        is_full_tank=data.get("is_full_tank", True),
+        notes=data.get("notes"),
+    )
+    db.add(record)
+    db.flush()
+    return record
+
+
+def _create_tax_insurance_record(db: Session, vehicle_id: int, doc_id: int, data: dict) -> TaxInsuranceRecord:
+    """Create a TaxInsuranceRecord from extracted document data."""
+    record_date = date.fromisoformat(data["date"]) if data.get("date") else date.today()
+    next_renewal = None
+    if data.get("next_renewal_date"):
+        try:
+            next_renewal = date.fromisoformat(data["next_renewal_date"])
+        except (ValueError, TypeError):
+            pass
+    record = TaxInsuranceRecord(
+        vehicle_id=vehicle_id,
+        document_id=doc_id,
+        date=record_date,
+        record_type=data.get("record_type", "other"),
+        name=data.get("name", "Document extrait"),
+        provider=data.get("provider"),
+        cost=data.get("cost", 0),
+        next_renewal_date=next_renewal,
+        renewal_frequency=data.get("renewal_frequency"),
+        notes=data.get("notes"),
+    )
+    db.add(record)
+    db.flush()
+    return record
 
 
 @router.get("/{vehicle_id}", response_model=list[DocumentOut])

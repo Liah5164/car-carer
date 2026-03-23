@@ -13,10 +13,18 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 def _get_user_vehicle_ids(db: Session, user: User) -> list[int]:
-    """Return list of vehicle IDs belonging to the user."""
-    return [v.id for v in db.query(Vehicle.id).filter(
+    """Return list of vehicle IDs belonging to the user (owned + shared)."""
+    from app.models.vehicle_access import VehicleAccess
+
+    # Vehicles the user owns directly
+    owned = [v.id for v in db.query(Vehicle.id).filter(
         (Vehicle.user_id == user.id) | (Vehicle.user_id.is_(None))
     ).all()]
+    # Vehicles shared with the user via VehicleAccess
+    shared = [a.vehicle_id for a in db.query(VehicleAccess.vehicle_id).filter(
+        VehicleAccess.user_id == user.id
+    ).all()]
+    return list(set(owned + shared))
 
 
 def _check_conversation_ownership(conv: Conversation, user: User, db: Session):

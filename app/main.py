@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 
 from app.database import Base, engine
-from app.routers import auth, vehicles, documents, chat
+from app.routers import auth, vehicles, documents, chat, access
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -26,6 +26,7 @@ app.include_router(auth.router)
 app.include_router(vehicles.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
+app.include_router(access.router)
 
 
 # ── Inline migrations ─────────────────────────────────────────────────

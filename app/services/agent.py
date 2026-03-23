@@ -3,12 +3,13 @@
 import logging
 
 import anthropic
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.tools import TOOL_DEFINITIONS, execute_tool
-from app.models import Vehicle
+from app.models import Vehicle, FuelRecord, VehicleNote, TaxInsuranceRecord, MaintenanceReminder
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,21 @@ def _build_context(db: Session, vehicle_id: int | None, allowed_vehicle_ids: lis
 
     if vehicle_id:
         lines.append(f"\nLa conversation porte sur le vehicule ID {vehicle_id}. Utilise cet ID dans tes appels d'outils.")
+
+        # Add data availability summary for the selected vehicle
+        fuel_count = db.query(func.count(FuelRecord.id)).filter(FuelRecord.vehicle_id == vehicle_id).scalar() or 0
+        notes_count = db.query(func.count(VehicleNote.id)).filter(VehicleNote.vehicle_id == vehicle_id).scalar() or 0
+        tax_count = db.query(func.count(TaxInsuranceRecord.id)).filter(TaxInsuranceRecord.vehicle_id == vehicle_id).scalar() or 0
+        reminder_count = db.query(func.count(MaintenanceReminder.id)).filter(
+            MaintenanceReminder.vehicle_id == vehicle_id, MaintenanceReminder.active == True
+        ).scalar() or 0
+
+        data_lines = ["\nDonnees disponibles pour ce vehicule:"]
+        data_lines.append(f"  - Pleins carburant: {fuel_count}")
+        data_lines.append(f"  - Notes: {notes_count}")
+        data_lines.append(f"  - Taxes/assurances: {tax_count}")
+        data_lines.append(f"  - Rappels entretien actifs: {reminder_count}")
+        lines.extend(data_lines)
     else:
         lines.append("\nAucun vehicule selectionne. Demande a l'utilisateur quel vehicule l'interesse si necessaire.")
 

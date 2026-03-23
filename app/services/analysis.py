@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models import (
     Vehicle, MaintenanceEvent, MaintenanceItem,
-    CTReport, CTDefect,
+    CTReport, CTDefect, FuelRecord, MaintenanceReminder,
 )
 from app.services.mileage import get_last_known_mileage
 
@@ -44,12 +44,17 @@ def analyze_vehicle(db: Session, vehicle_id: int) -> dict:
     ct_analysis = _analyze_ct_evolution(db, vehicle_id)
     interval_alerts = _check_maintenance_intervals(db, vehicle_id)
     unresolved = _check_unresolved_ct_defects(db, vehicle_id)
+    smart_reminder_alerts = evaluate_smart_reminders(db, vehicle_id)
+    work_type_analysis = _analyze_work_type_distribution(db, vehicle_id)
 
     # Collect all alerts sorted by priority
     alerts = []
     alerts.extend(ct_analysis.get("alerts", []))
     alerts.extend(interval_alerts)
     alerts.extend(unresolved)
+    alerts.extend(smart_reminder_alerts)
+    if work_type_analysis.get("alert"):
+        alerts.append(work_type_analysis["alert"])
     alerts.sort(key=lambda a: {"critical": 0, "warning": 1, "info": 2}.get(a["level"], 3))
 
     health_score = _compute_health_score(ct_analysis, interval_alerts, unresolved)
@@ -65,6 +70,8 @@ def analyze_vehicle(db: Session, vehicle_id: int) -> dict:
         "alerts": alerts,
         "maintenance_intervals": interval_alerts,
         "unresolved_defects": unresolved,
+        "smart_reminders": smart_reminder_alerts,
+        "work_type_distribution": work_type_analysis.get("distribution"),
         "health_score": health_score,
     }
 
@@ -450,3 +457,142 @@ def _compute_health_score(ct_analysis: dict, intervals: list[dict], unresolved: 
     color = "green" if score >= 80 else "blue" if score >= 60 else "orange" if score >= 40 else "red"
 
     return {"score": score, "label": label, "color": color, "details": details}
+
+
+# --- Smart reminders (Task 5) ---
+
+def _get_current_mileage(db: Session, vehicle_id: int) -> int | None:
+    """Get the most recent mileage from MaintenanceEvent, FuelRecord, or CTReport."""
+    sources = []
+
+    last_ev = db.query(MaintenanceEvent.mileage).filter(
+        MaintenanceEvent.vehicle_id == vehicle_id, MaintenanceEvent.mileage.isnot(None)
+    ).order_by(MaintenanceEvent.date.desc()).first()
+    if last_ev:
+        sources.append(last_ev[0])
+
+    last_fuel = db.query(FuelRecord.mileage).filter(
+        FuelRecord.vehicle_id == vehicle_id, FuelRecord.mileage.isnot(None)
+    ).order_by(FuelRecord.date.desc()).first()
+    if last_fuel:
+        sources.append(last_fuel[0])
+
+    last_ct = db.query(CTReport.mileage).filter(
+        CTReport.vehicle_id == vehicle_id, CTReport.mileage.isnot(None)
+    ).order_by(CTReport.date.desc()).first()
+    if last_ct:
+        sources.append(last_ct[0])
+
+    return max(sources) if sources else None
+
+
+def evaluate_smart_reminders(db: Session, vehicle_id: int) -> list[dict]:
+    """Evaluate all active reminders for a vehicle and return triggered alerts."""
+    reminders = db.query(MaintenanceReminder).filter(
+        MaintenanceReminder.vehicle_id == vehicle_id,
+        MaintenanceReminder.active == True  # noqa: E712
+    ).all()
+
+    if not reminders:
+        return []
+
+    current_km = _get_current_mileage(db, vehicle_id)
+    today = date.today()
+
+    alerts = []
+    for r in reminders:
+        triggered = False
+        reason = ""
+
+        # Check km-based trigger
+        if r.trigger_mode in ("km_only", "km_or_date"):
+            if r.km_interval and r.last_performed_km and current_km:
+                km_since = current_km - r.last_performed_km
+                if km_since >= r.km_interval:
+                    triggered = True
+                    reason = f"{km_since:,} km depuis le dernier ({r.km_interval:,} km prevus)"
+
+        # Check date-based trigger
+        if not triggered and r.trigger_mode in ("date_only", "km_or_date"):
+            if r.months_interval and r.last_performed_date:
+                months_since = (today.year - r.last_performed_date.year) * 12 + today.month - r.last_performed_date.month
+                if months_since >= r.months_interval:
+                    triggered = True
+                    reason = f"{months_since} mois depuis le dernier ({r.months_interval} mois prevus)"
+
+        if triggered:
+            # Determine urgency: if over 120% of threshold, critical
+            urgency = "warning"
+            if r.trigger_mode in ("km_only", "km_or_date") and r.km_interval and r.last_performed_km and current_km:
+                km_since = current_km - r.last_performed_km
+                if km_since >= r.km_interval * 1.2:
+                    urgency = "critical"
+            if r.trigger_mode in ("date_only", "km_or_date") and r.months_interval and r.last_performed_date:
+                months_since = (today.year - r.last_performed_date.year) * 12 + today.month - r.last_performed_date.month
+                if months_since >= r.months_interval * 1.2:
+                    urgency = "critical"
+
+            alerts.append({
+                "level": urgency,
+                "category": "reminder",
+                "reminder_id": r.id,
+                "title": f"Rappel : {r.title}",
+                "detail": reason,
+                "description": r.description,
+            })
+
+    return alerts
+
+
+# --- Work type distribution analysis (Task 6) ---
+
+def _analyze_work_type_distribution(db: Session, vehicle_id: int) -> dict:
+    """Analyze cost distribution by work_type (service/repair/upgrade).
+
+    Returns distribution dict + an alert if repair costs exceed 40% of total.
+    """
+    events = (
+        db.query(MaintenanceEvent)
+        .filter(
+            MaintenanceEvent.vehicle_id == vehicle_id,
+            MaintenanceEvent.event_type == "invoice",
+            MaintenanceEvent.total_cost.isnot(None),
+        )
+        .all()
+    )
+
+    if not events:
+        return {"distribution": None, "alert": None}
+
+    by_type = {"service": 0.0, "repair": 0.0, "upgrade": 0.0, "unknown": 0.0}
+    for ev in events:
+        wt = ev.work_type if ev.work_type in ("service", "repair", "upgrade") else "unknown"
+        by_type[wt] += float(ev.total_cost or 0)
+
+    total = sum(by_type.values())
+    if total == 0:
+        return {"distribution": by_type, "alert": None}
+
+    distribution = {
+        "service": round(by_type["service"], 2),
+        "repair": round(by_type["repair"], 2),
+        "upgrade": round(by_type["upgrade"], 2),
+        "unknown": round(by_type["unknown"], 2),
+        "total": round(total, 2),
+        "service_pct": round(by_type["service"] / total * 100, 1),
+        "repair_pct": round(by_type["repair"] / total * 100, 1),
+        "upgrade_pct": round(by_type["upgrade"] / total * 100, 1),
+    }
+
+    alert = None
+    if distribution["repair_pct"] > 40:
+        alert = {
+            "level": "warning",
+            "category": "cost_analysis",
+            "title": "Proportion elevee de reparations",
+            "detail": f"Les reparations representent {distribution['repair_pct']}% du budget total "
+                      f"({distribution['repair']:.0f} EUR sur {total:.0f} EUR). "
+                      "Un entretien preventif plus regulier pourrait reduire ces couts.",
+        }
+
+    return {"distribution": distribution, "alert": alert}

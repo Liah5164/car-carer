@@ -33,6 +33,7 @@ Extrais les informations suivantes au format JSON strict :
   "mileage": nombre ou null,
   "garage_name": "string ou null",
   "total_cost": nombre ou null,
+  "work_type": "service" ou "repair" ou "upgrade",
   "vehicle_info": {
     "brand": "marque du vehicule ou null",
     "model": "modele du vehicule ou null",
@@ -54,6 +55,12 @@ Extrais les informations suivantes au format JSON strict :
   ],
   "notes": "remarques generales ou null"
 }
+
+WORK_TYPE — choisis le type principal de l'intervention :
+- "service" = entretien courant planifie (vidange, filtres, revision, pneus saisonniers)
+- "repair" = reparation suite a usure ou panne (plaquettes usees, amortisseurs, batterie HS)
+- "upgrade" = amelioration au-dela du standard (LED, kit sport, protection ceramique)
+En cas de doute, utilise "service" par defaut.
 
 CATEGORIES DISPONIBLES (choisis la plus precise) :
 - moteur : bloc moteur, culasse, joint de culasse, bougies, injecteurs, turbo, durite, support moteur, courroie accessoire, pompe a eau
@@ -123,6 +130,52 @@ IMPORTANT :
 - "a_surveiller" correspond aux points a controler lors du prochain CT
 - Si pas de defauts, retourne une liste vide
 - Retourne UNIQUEMENT le JSON, sans markdown ni commentaire"""
+
+FUEL_PROMPT = """Analyse ce ticket de station-service ou recu de carburant.
+Extrais les informations suivantes au format JSON strict :
+
+{
+  "doc_type": "fuel",
+  "date": "YYYY-MM-DD",
+  "mileage": null ou nombre entier (kilometres au compteur si visible),
+  "liters": nombre decimal (litres de carburant),
+  "price_total": nombre decimal (montant total paye),
+  "price_per_liter": nombre decimal (prix au litre),
+  "station_name": "nom de la station" ou null,
+  "fuel_type": "essence", "diesel", "E85", "GPL", "electrique" ou null,
+  "is_full_tank": true ou false (true si plein complet, false si partiel)
+}
+
+Si une information n'est pas visible, mets null.
+Reponds UNIQUEMENT avec le JSON, sans texte additionnel."""
+
+TAX_INSURANCE_PROMPT = """Analyse ce document administratif ou d'assurance automobile.
+Extrais les informations suivantes au format JSON strict :
+
+{
+  "doc_type": "tax_insurance",
+  "record_type": "insurance" ou "vignette" ou "carbon_tax" ou "registration" ou "parking" ou "toll_tag" ou "other",
+  "name": "description du document (ex: Assurance RC, Carte grise, etc.)",
+  "provider": "nom de l'organisme (assureur, prefecture, etc.)" ou null,
+  "date": "YYYY-MM-DD" (date du document ou du paiement),
+  "cost": nombre decimal (montant),
+  "next_renewal_date": "YYYY-MM-DD" ou null (prochaine echeance),
+  "renewal_frequency": "monthly" ou "annual" ou "biennial" ou "one_time" ou null,
+  "vehicle_plate": "immatriculation" ou null,
+  "vehicle_vin": "VIN" ou null
+}
+
+Si une information n'est pas visible, mets null.
+Reponds UNIQUEMENT avec le JSON, sans texte additionnel."""
+
+DETECT_PROMPT = """Quel est le type de ce document automobile ?
+Reponds UNIQUEMENT par un seul mot parmi :
+- "facture" (facture ou devis d'entretien/reparation)
+- "ct" (proces-verbal de controle technique)
+- "carburant" (ticket de station-service, recu de plein)
+- "administratif" (assurance, carte grise, vignette, taxe, amende, peage)
+
+Reponds UNIQUEMENT par un seul mot, sans explication."""
 
 
 def _pdf_to_images(file_path: str) -> list[bytes]:
@@ -283,7 +336,7 @@ async def extract_document(file_path: str, doc_type_hint: str = "auto") -> dict:
 
     Args:
         file_path: Path to the uploaded file (PDF or image)
-        doc_type_hint: "invoice", "ct_report", "quote", or "auto"
+        doc_type_hint: "invoice", "ct_report", "quote", "fuel", "tax_insurance", or "auto"
 
     Returns:
         Extracted structured data as dict
@@ -296,16 +349,24 @@ async def extract_document(file_path: str, doc_type_hint: str = "auto") -> dict:
         prompts_to_try = [CT_PROMPT]
     elif doc_type_hint in ("invoice", "quote"):
         prompts_to_try = [INVOICE_PROMPT]
+    elif doc_type_hint == "fuel":
+        prompts_to_try = [FUEL_PROMPT]
+    elif doc_type_hint == "tax_insurance":
+        prompts_to_try = [TAX_INSURANCE_PROMPT]
     else:
-        detected = _call_openrouter(
-            image_parts,
-            "Ce document est-il un controle technique (CT) ou une facture/devis d'entretien ? Reponds UNIQUEMENT par 'ct' ou 'facture'.",
-        ).strip().lower()
+        # Auto-detect document type using DETECT_PROMPT
+        detected = _call_openrouter(image_parts, DETECT_PROMPT).strip().lower()
         logger.info("Auto-detection result: %s", detected)
+
         if "ct" in detected:
-            prompts_to_try = [CT_PROMPT, INVOICE_PROMPT]
+            prompts_to_try = [CT_PROMPT, INVOICE_PROMPT, FUEL_PROMPT, TAX_INSURANCE_PROMPT]
+        elif "carburant" in detected:
+            prompts_to_try = [FUEL_PROMPT, INVOICE_PROMPT, CT_PROMPT, TAX_INSURANCE_PROMPT]
+        elif "administratif" in detected:
+            prompts_to_try = [TAX_INSURANCE_PROMPT, INVOICE_PROMPT, CT_PROMPT, FUEL_PROMPT]
         else:
-            prompts_to_try = [INVOICE_PROMPT, CT_PROMPT]
+            # Default: facture first
+            prompts_to_try = [INVOICE_PROMPT, CT_PROMPT, FUEL_PROMPT, TAX_INSURANCE_PROMPT]
 
     last_raw = ""
     for prompt in prompts_to_try:
